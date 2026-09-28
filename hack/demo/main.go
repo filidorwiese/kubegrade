@@ -23,7 +23,7 @@ func main() {
 			What: "1 minor behind 6.1.0, have 6.0.0", Fix: "helm upgrade to 6.1.0"},
 		{ID: "node-info", Category: check.Versions, Severity: check.Info, Resource: "4 nodes",
 			What: "Debian GNU/Linux 13 (trixie), kernel 6.12.107 LTS until 2028-12-31, up 3d to 12d"},
-		{ID: "image-tag-latest", Category: check.Hygiene, Severity: check.Medium, Resource: "deploy shop/checkout-api",
+		{ID: "image-tag-latest", Category: check.Hygiene, Severity: check.Low, Resource: "deploy shop/checkout-api",
 			What: "image checkout-api:latest", Fix: "pin a version tag"},
 		{ID: "node-drift", Category: check.Hygiene, Severity: check.High, Resource: "node worker-2",
 			What: "kernel 6.12.63 differs from 4 nodes on 6.12.107, up 109d", Fix: "pending reboot or upgrade"},

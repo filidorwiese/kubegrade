@@ -65,7 +65,7 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			noDigest++
 		}
 		if len(unpinned) > 0 {
-			out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Medium,
+			out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Low,
 				Resource: "deploy " + d.Namespace + "/" + d.Name,
 				What:     "image " + strings.Join(unpinned, ", "), Fix: "pin a version tag"})
 		}

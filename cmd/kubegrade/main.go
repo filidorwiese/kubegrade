@@ -29,18 +29,18 @@ import (
 var version = "dev"
 
 type options struct {
-	kubeconfig  string
-	format      string
-	clusterName string
-	noColor     bool
-	verbose     bool
+	kubeconfig string
+	context    string
+	format     string
+	noColor    bool
+	verbose    bool
 }
 
 func main() {
 	var o options
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; defaults to $KUBECONFIG or ~/.kube/config")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
-	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
+	flag.StringVar(&o.context, "context", "", "kubeconfig context; defaults to the current one")
 	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
 	flag.BoolVar(&o.verbose, "v", false, "show info findings")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -66,15 +66,12 @@ func run(o options, log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	cfg, ctxName, err := loadConfig(o.kubeconfig)
+	cfg, cluster, err := loadConfig(o.kubeconfig, o.context)
 	if err != nil {
 		return err
 	}
-	if o.clusterName == "" {
-		o.clusterName = ctxName
-	}
 
-	fmt.Fprintf(os.Stderr, "cluster: %s (%s)\n", o.clusterName, cfg.Host)
+	fmt.Fprintf(os.Stderr, "cluster: %s (%s)\n", cluster, cfg.Host)
 	if v := newerRelease(ctx); v != "" {
 		fmt.Fprintf(os.Stderr, "update available: %s (running %s), https://github.com/filidorwiese/kubegrade/releases/latest\n", v, version)
 	}
@@ -99,7 +96,7 @@ func run(o options, log *slog.Logger) error {
 	result := grade.Compute(findings)
 
 	rep := report.Build(report.Input{
-		Agent: version, Cluster: o.clusterName, ScannedAt: snap.ScannedAt, Duration: time.Since(start),
+		Agent: version, Cluster: cluster, ScannedAt: snap.ScannedAt, Duration: time.Since(start),
 		Findings: findings, Result: result, Errors: snap.Errors,
 	})
 	if o.format == "json" {
@@ -126,21 +123,25 @@ func useColor(o options) bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-// loadConfig loads the kubeconfig. The second return is the cluster name
-// fallback: the current context name.
-func loadConfig(path string) (*rest.Config, string, error) {
+// loadConfig loads the kubeconfig. The second return is the context name,
+// used as the cluster name in the report.
+func loadConfig(path, context string) (*rest.Config, string, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	rules.ExplicitPath = path
-	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
-	raw, err := cc.RawConfig()
-	if err != nil {
-		return nil, "", err
-	}
+	overrides := &clientcmd.ConfigOverrides{CurrentContext: context}
+	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
 	cfg, err := cc.ClientConfig()
 	if err != nil {
 		return nil, "", err
 	}
-	name := raw.CurrentContext
+	name := context
+	if name == "" {
+		raw, err := cc.RawConfig()
+		if err != nil {
+			return nil, "", err
+		}
+		name = raw.CurrentContext
+	}
 	if name == "" {
 		name = "unknown"
 	}

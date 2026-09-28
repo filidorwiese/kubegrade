@@ -19,7 +19,7 @@ kubegrade -v              # include info findings
 kubegrade --format json
 ```
 
-Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color`.
+Flags: `--context`, `--kubeconfig`, `--format text|json`, `-v`, `--no-color`.
 Needs cluster-wide read access, including Helm release secrets.
 
 ![example report](kubegrade-example-report.png)

@@ -152,7 +152,9 @@ func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if g.restarts < restartThreshold {
 			continue
 		}
-		sev := Low
+		// Counts are cumulative for the pod's lifetime, so a day without a
+		// restart means the incident is over: keep it visible, stop grading it.
+		sev := Info
 		what := fmtInt(int(g.restarts)) + " restarts across " + plural(g.pods, "pod")
 		if !g.last.IsZero() {
 			ago := s.ScannedAt.Sub(g.last)
