@@ -59,7 +59,7 @@ func All() []Check {
 		k8sVersion{}, k8sDeprecated{},
 		helmStatus{}, chartOutdated{}, imageTags{},
 		kubeletSkew{}, kernelEOL{}, osEOL{}, nodeDrift{}, nodeInfo{}, nodeNotReady{},
-		crashLoop{}, podPending{}, deployUnavailable{}, pvcUsage{},
+		crashLoop{}, podRestarts{}, podPending{}, deployUnavailable{}, pvcUsage{},
 	}
 }
 

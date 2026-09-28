@@ -94,6 +94,74 @@ func kindPrefix(kind string) string {
 	return kind
 }
 
+// podRestarts flags workloads whose pods restart without being in
+// CrashLoopBackOff (those are covered by crashLoop). Restart count is
+// cumulative, so recency of the last termination decides the severity.
+type podRestarts struct{}
+
+func (podRestarts) ID() string       { return "pod-restarts" }
+func (podRestarts) Category() string { return Health }
+
+const restartThreshold = 5
+
+func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	type group struct {
+		restarts int32
+		pods     int
+		last     time.Time
+	}
+	groups := map[string]*group{}
+	var order []string
+	for _, p := range s.Pods {
+		var restarts int32
+		var last time.Time
+		looping := false
+		for _, cs := range p.Status.ContainerStatuses {
+			if cs.State.Waiting != nil && cs.State.Waiting.Reason == "CrashLoopBackOff" {
+				looping = true
+			}
+			restarts += cs.RestartCount
+			if t := cs.LastTerminationState.Terminated; t != nil && t.FinishedAt.Time.After(last) {
+				last = t.FinishedAt.Time
+			}
+		}
+		if looping || restarts == 0 {
+			continue
+		}
+		owner := ownerOf(p, s.ReplicaSets)
+		g := groups[owner]
+		if g == nil {
+			g = &group{}
+			groups[owner] = g
+			order = append(order, owner)
+		}
+		g.restarts += restarts
+		g.pods++
+		if last.After(g.last) {
+			g.last = last
+		}
+	}
+	var out []Finding
+	for _, owner := range order {
+		g := groups[owner]
+		if g.restarts < restartThreshold {
+			continue
+		}
+		sev := Low
+		what := fmtInt(int(g.restarts)) + " restarts across " + plural(g.pods, "pod")
+		if !g.last.IsZero() {
+			ago := s.ScannedAt.Sub(g.last)
+			what += ", last " + humanDuration(ago) + " ago"
+			if ago < 24*time.Hour {
+				sev = Medium
+			}
+		}
+		out = append(out, Finding{ID: "pod-restarts", Category: Health, Severity: sev, Resource: owner,
+			What: what, Fix: "kubectl logs -p, check probes and limits"})
+	}
+	return out
+}
+
 type podPending struct{}
 
 func (podPending) ID() string       { return "pod-pending" }

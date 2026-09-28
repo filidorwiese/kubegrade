@@ -29,8 +29,8 @@ Three categories of 100 points, each answering one question:
   kubelet skew.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm
   revision pile-up, drift between nodes.
-- **Health**: crash loops, pending pods, unavailable deployments, failed
-  Helm releases, NotReady nodes, full volumes.
+- **Health**: crash loops, frequent restarts, pending pods, unavailable
+  deployments, failed Helm releases, NotReady nodes, full volumes.
 
 Findings deduct info 0, low 3, medium 8, high 15, critical 30. Overall is the average, capped at the worst category's
 letter, with the score clamped to the top of that band.
