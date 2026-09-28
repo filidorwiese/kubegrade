@@ -1,11 +1,10 @@
-// Command kubegrade-agent scans the cluster it runs in on a timer and prints
-// findings plus a letter grade to stdout. Nothing leaves the cluster unless
-// --online is set, which only fetches public EOL tables.
+// Command kubegrade scans the cluster in your kubeconfig and prints findings
+// plus a letter grade to stdout. Nothing leaves your machine unless --online
+// is set, which fetches public EOL tables and Helm repo indexes.
 package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -39,7 +38,7 @@ type options struct {
 
 func main() {
 	var o options
-	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; in-cluster config when empty")
+	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; defaults to $KUBECONFIG or ~/.kube/config")
 	flag.DurationVar(&o.interval, "interval", 15*time.Minute, "time between scans")
 	flag.BoolVar(&o.once, "once", false, "run a single scan and exit")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
@@ -131,16 +130,9 @@ func scan(ctx context.Context, o options, c *collect.Collector, st *state.Store,
 	return report.WriteText(os.Stdout, r)
 }
 
-// loadConfig prefers in-cluster config and falls back to kubeconfig. The
-// second return is the cluster name fallback.
+// loadConfig loads the kubeconfig. The second return is the cluster name
+// fallback: the current context name.
 func loadConfig(path string) (*rest.Config, string, error) {
-	if path == "" {
-		if cfg, err := rest.InClusterConfig(); err == nil {
-			return cfg, "in-cluster", nil
-		} else if !errors.Is(err, rest.ErrNotInCluster) {
-			return nil, "", err
-		}
-	}
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	rules.ExplicitPath = path
 	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
