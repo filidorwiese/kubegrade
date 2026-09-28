@@ -156,7 +156,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	bannerW := utf8.RuneCountInString(banner[0])
 	var side []string
 	for _, c := range r.Categories {
-		side = append(side, fmt.Sprintf("%-9s %s  %s", check.CategoryNames[c.ID], paint(gradeStyle(c.Grade), fmt.Sprintf("%-2s", c.Grade)), summarise(r.Findings, c.ID)))
+		side = append(side, strings.TrimRight(fmt.Sprintf("%-9s %s  %s", check.CategoryNames[c.ID], paint(gradeStyle(c.Grade), fmt.Sprintf("%-2s", c.Grade)), summarise(r.Findings, c.ID)), " "))
 	}
 	if r.CappedBy != "" {
 		side = append(side, "", paint(dim, "capped by "+check.CategoryNames[r.CappedBy]))
@@ -308,9 +308,6 @@ func summarise(fs []Finding, category string) string {
 		if n := counts[sev]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", n, sev))
 		}
-	}
-	if len(parts) == 0 {
-		return "no findings"
 	}
 	return strings.Join(parts, ", ")
 }
