@@ -1,0 +1,94 @@
+# .kekkai.yaml - kekkai sandbox configuration
+# This file is optional: kekkai runs on defaults without it.
+# Every setting below is optional - uncomment to change it.
+
+image:
+#   # Node.js version, installed at image build time: "lts" (default) or a
+#   # version number like "22", "22.11" or "22.11.0"
+#   node_version: lts
+#
+#   # Extra apt packages baked into the image, appended to kekkai's builtin
+#   # set (python3 + pip come preinstalled), e.g. python libraries:
+  apt_packages: [golang-go]
+#
+#   # Custom apt repositories for apt_packages to install from.
+#   # urls must be https. Omit key_url when Debian already ships
+#   # the signing key (e.g. backports).
+#   apt_repos:
+#     - name: backports
+#       url: https://deb.debian.org/debian
+#       suite: trixie-backports
+#       components: main   # optional, defaults to main
+
+# claude:
+#   # "latest" (default) resolves the newest release at 'kekkai up', so a new
+#   # Claude release triggers an image rebuild. Pin an exact version ("2.0.14")
+#   # for a stable image.
+#   version: latest
+#
+#   # Passed to claude verbatim, REPLACING the default - keep the flag below if
+#   # you want autonomous mode. Example with a model: "--dangerously-skip-permissions --model opus"
+#   args: "--dangerously-skip-permissions"
+
+git:
+#   # true: mounts ~/.gitconfig (readonly) - your identity and settings;
+#   # the agent can create local commits.
+#   # false (or section omitted): .git is mounted readonly - the agent
+#   # can read history (log, diff, show) but not commit or rewrite it.
+  enabled: true
+#
+#   # Exposes your SSH agent ($SSH_AUTH_SOCK) and allowed_signers file:
+#   # enables SSH commit signing and push/pull to allowed hosts.
+#   # Off by default - the agent can then act with all your loaded keys.
+#   # Requires git.enabled: true.
+  ssh_agent: true
+
+# disk:
+#   mounts:
+#     - source: ~/.aws              # host path
+#       target: /home/kekkai/.aws   # optional - inferred when omitted
+#       readonly: true
+#       optional: true              # skip silently when the source is missing
+
+# env:
+#   # Extra environment for the sandbox (map, not list). ${VAR} passes host
+#   # values through.
+#   NODE_ENV: development
+#   GH_TOKEN: ${GH_TOKEN}
+#   # Point Claude at another API endpoint; this also switches off the
+#   # built-in request capture (kekkai mpr).
+#   ANTHROPIC_BASE_URL: https://example.invalid
+
+network:
+#   # Omitted network section = egress firewall on
+#   # Note: api.anthropic.com (required by Claude Code) is always allowed.
+#
+#   # GitHub git/api/ssh via the api.github.com/meta CIDR list:
+#   allow_github: true
+#
+#   # Allowed egress domains, resolved to IPs at sandbox startup.
+#   # Example: the python and npm package registries:
+#   allowed_domains:
+#     - pypi.org
+#     - files.pythonhosted.org
+#     - registry.npmjs.org
+#
+#   # Literal IP ranges, e.g. your LAN or a staging network:
+#   allowed_cidrs:
+#     - 192.168.1.0/24
+#
+#   # Escape hatch: true disables the egress firewall entirely.
+#   # Must be the ONLY network key when set.
+  allow_all: true
+
+# secrets:
+#   # Exact file/dir paths relative to the project root (no globs) that the
+#   # agent must not read. Files read empty; directories become empty tmpfs.
+#   hide:
+#     - .env.production
+#     - deploy/certs
+
+# limits:
+#   # Container resource caps; unlimited when omitted.
+#   cpus: 4
+#   memory: 8g
