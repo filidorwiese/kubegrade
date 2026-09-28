@@ -16,11 +16,15 @@ import (
 )
 
 type Collector struct {
-	cs     kubernetes.Interface
-	dyn    dynamic.Interface
-	tables *data.Tables
-	log    *slog.Logger
-	report progress.Func
+	// host and serverName mirror the kubeconfig so the API server cert can
+	// be read from a plain TLS handshake.
+	host       string
+	serverName string
+	cs         kubernetes.Interface
+	dyn        dynamic.Interface
+	tables     *data.Tables
+	log        *slog.Logger
+	report     progress.Func
 }
 
 func New(cfg *rest.Config, tables *data.Tables, log *slog.Logger, report progress.Func) (*Collector, error) {
@@ -32,7 +36,7 @@ func New(cfg *rest.Config, tables *data.Tables, log *slog.Logger, report progres
 	if err != nil {
 		return nil, err
 	}
-	return &Collector{cs: cs, dyn: dyn, tables: tables, log: log, report: report}, nil
+	return &Collector{host: cfg.Host, serverName: cfg.TLSClientConfig.ServerName, cs: cs, dyn: dyn, tables: tables, log: log, report: report}, nil
 }
 
 // Collect builds the snapshot. Core list calls are fatal; everything else
@@ -41,7 +45,7 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	s := &Snapshot{ScannedAt: time.Now().UTC(), Tables: c.tables}
 	all := metav1.ListOptions{}
 	const phase = "collecting cluster data"
-	step, total := 0, 10
+	step, total := 0, 11
 	tick := func() {
 		step++
 		c.report(phase, step, total)
@@ -102,6 +106,8 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	c.try(s, "kubelet stats", func() error { return c.kubeletStats(ctx, s) })
 	tick()
 	c.try(s, "deprecated apis", func() error { return c.deprecatedAPIs(ctx, s) })
+	tick()
+	c.try(s, "certificates", func() error { return c.certificates(ctx, s) })
 	tick()
 	c.try(s, "chart upstream", func() error { return c.chartUpstream(ctx, s) })
 	return s, nil

@@ -30,6 +30,8 @@ type Snapshot struct {
 	// k3s that is effectively the boot time.
 	NodeStart  map[string]time.Time
 	Deprecated []DeprecatedUse
+	Certs      []Cert
+	CertIssues []CertIssue
 	// ChartLatest is chart name -> newest stable upstream version.
 	ChartLatest map[string]ChartUpstream
 
@@ -75,6 +77,27 @@ type NodeFS struct {
 	Kind     string
 	Used     uint64
 	Capacity uint64
+}
+
+// Cert is a certificate we can see: Kind "apiserver" (from the handshake)
+// or "secret" (a kubernetes.io/tls secret).
+type Cert struct {
+	Kind      string
+	Namespace string
+	Name      string
+	Subject   string
+	NotAfter  time.Time
+	// Managed means cert-manager owns the secret and renews it itself.
+	Managed bool
+	// Referenced means an Ingress serves this secret.
+	Referenced bool
+}
+
+// CertIssue is a cert-manager Certificate whose Ready condition is not True.
+type CertIssue struct {
+	Namespace string
+	Name      string
+	Reason    string
 }
 
 type VolumeStat struct {

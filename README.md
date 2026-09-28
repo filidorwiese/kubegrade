@@ -20,15 +20,15 @@ kubegrade --format json
 ```
 
 Flags: `--context`, `--format text|json`, `-v`, `--no-color`. Reads `$KUBECONFIG` or `~/.kube/config`.
-Needs cluster-wide read access, including Helm release secrets.
+Needs cluster-wide read access, including Helm and TLS secrets.
 
 ![example report](kubegrade-example-report.png)
 
 ## Included tests
 
 - **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream and deprecated charts.
-- **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, cordoned nodes, evicted, finished and controller-less pods, unmounted volumes.
-- **Health**: crash loops, frequent restarts, image pull failures, pending pods, unavailable deployments, failed releases, NotReady nodes, node pressure, full node disks and volumes.
+- **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, cordoned nodes, evicted, finished and controller-less pods, unmounted volumes, expired unused TLS secrets.
+- **Health**: crash loops, frequent restarts, image pull failures, pending pods, unavailable deployments, failed releases, NotReady nodes, node pressure, full node disks and volumes, expiring certificates.
 
 ## Scoring
 
