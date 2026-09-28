@@ -13,7 +13,7 @@ Single Go binary running in-cluster on k3s. Scans on a timer, prints findings an
 | CI | build + push only, no test gate |
 | Tests | none (prototype) |
 | Build order | all 9 steps in one batch |
-| Cap rule | caps letter; score clamped to top of capped band |
+| Cap rule | overall letter never above the worst category letter; score clamped to top of that band |
 | Image checks | Deployments only; skip k3s bundled kube-system workloads |
 | Deprecated APIs | Pluto `versions.yaml` vendored; k8s rows only; ClusterRole list rules generated from table |
 | API server cert | dial the host from the loaded rest config |
@@ -26,7 +26,7 @@ Single Go binary running in-cluster on k3s. Scans on a timer, prints findings an
 ## Grading
 
 Five categories, 100 points each. Severity points: info 0, low 3, medium 8, high 15, critical 30. Category floor 0.
-Overall = average, then capped one letter above the worst category, score clamped to band top.
+Overall = average, then capped at the worst category letter, score clamped to band top.
 Letters: A+ 95-100, A 85-94, B 70-84, C 55-69, D 40-54, F 0-39.
 
 ## Checks

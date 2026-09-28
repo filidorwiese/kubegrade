@@ -30,8 +30,8 @@ names to repo URLs. Add your charts there; unmapped ones show as info.
 ## Grading
 
 Five categories of 100 points. Findings deduct info 0, low 3, medium 8,
-high 15, critical 30. Overall is the average, capped at one letter above the
-worst category, with the score clamped to the top of that band.
+high 15, critical 30. Overall is the average, capped at the worst category's
+letter, with the score clamped to the top of that band.
 
 A+ 95-100, A 85-94, B 70-84, C 55-69, D 40-54, F 0-39.
 

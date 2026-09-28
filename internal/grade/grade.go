@@ -94,14 +94,11 @@ func Compute(findings []check.Finding) Result {
 	r.Score = total / len(check.Categories)
 	r.Grade = Letter(r.Score)
 
-	// Cap: never more than one letter above the worst category.
-	allowed := worst - 1
-	if allowed < 0 {
-		allowed = 0
-	}
-	if letterIndex(r.Grade) < allowed {
-		r.Grade = letters[allowed].Letter
-		r.Score = letters[allowed].Max
+	// Cap: overall is never better than the worst category's letter, so the
+	// worst thing is always the thing to fix.
+	if letterIndex(r.Grade) < worst {
+		r.Grade = letters[worst].Letter
+		r.Score = letters[worst].Max
 	} else {
 		r.CappedBy = ""
 	}
