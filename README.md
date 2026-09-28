@@ -25,7 +25,7 @@ One scan per invocation. Flags: `--format text|json`, `--cluster-name`
 
 Three categories of 100 points, each answering one question:
 
-- **Up to date**: Kubernetes, kernel, OS support windows; chart versions;
+- **Versions**: Kubernetes, kernel, OS support windows; chart versions;
   kubelet skew.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm
   revision pile-up, drift between nodes.

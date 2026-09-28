@@ -27,7 +27,7 @@ Free, open-source CLI. Single Go binary that scans a cluster through kubeconfig 
 
 ## Grading
 
-Three categories, 100 points each: up-to-date, hygiene, health (regrouped 2026-09-28 from control-plane/workloads/nodes/sustained). Severity points: info 0, low 3, medium 8, high 15, critical 30. Category floor 0.
+Three categories, 100 points each: versions, hygiene, health (regrouped 2026-09-28 from control-plane/workloads/nodes/sustained). Severity points: info 0, low 3, medium 8, high 15, critical 30. Category floor 0.
 Overall = average, then capped at the worst category letter, score clamped to band top.
 Letters: A+ 95-100, A 85-94, B 70-84, C 55-69, D 40-54, F 0-39.
 
@@ -35,7 +35,7 @@ Letters: A+ 95-100, A 85-94, B 70-84, C 55-69, D 40-54, F 0-39.
 
 Check IDs are stable:
 
-- up-to-date: `k8s-version-eol`, `k8s-version-behind`, `kernel-eol`, `os-eol`, `kubelet-skew`, `chart-outdated`, `chart-unresolved`, `node-info`
+- versions: `k8s-version-eol`, `k8s-version-behind`, `kernel-eol`, `os-eol`, `kubelet-skew`, `chart-outdated`, `chart-unresolved`, `node-info`
 - hygiene: `k8s-api-deprecated`, `image-tag-latest`, `image-no-digest`, `helm-revisions`, `node-drift`
 - health: `helm-status`, `pod-crashloop` (severity by restart count), `pod-pending`, `deploy-unavailable`, `node-notready`, `pvc-usage` (medium at 90%, high at 95%)
 

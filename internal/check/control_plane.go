@@ -12,7 +12,7 @@ import (
 type k8sVersion struct{}
 
 func (k8sVersion) ID() string       { return "k8s-version-eol" }
-func (k8sVersion) Category() string { return UpToDate }
+func (k8sVersion) Category() string { return Versions }
 
 func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	tbl := s.Tables.Kubernetes
@@ -22,7 +22,7 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 
 	v, ok := tbl.Find(cur)
 	if !ok {
-		return []Finding{{ID: "k8s-version-eol", Category: UpToDate, Severity: Info,
+		return []Finding{{ID: "k8s-version-eol", Category: Versions, Severity: Info,
 			Resource: resource, What: "version " + cur + " not in EOL table"}}
 	}
 	eol, ok := data.ParseDate(v.EOL)
@@ -42,7 +42,7 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			if left < 0 {
 				what = "unsupported since " + v.EOL + " (" + fmtInt(-days(left)) + " days ago)"
 			}
-			out = append(out, Finding{ID: "k8s-version-eol", Category: UpToDate, Severity: sev,
+			out = append(out, Finding{ID: "k8s-version-eol", Category: Versions, Severity: sev,
 				Resource: resource, What: what, Fix: "upgrade to " + tbl.Latest})
 		}
 	}
@@ -50,7 +50,7 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	// One minor behind is the normal place to be; points start at two.
 	behind := minorInt(tbl.Latest) - minorInt(cur)
 	if behind > 0 {
-		f := Finding{ID: "k8s-version-behind", Category: UpToDate, Severity: Info,
+		f := Finding{ID: "k8s-version-behind", Category: Versions, Severity: Info,
 			Resource: "kubernetes " + cur, What: plural(behind, "minor") + " behind latest known (" + tbl.Latest + ")"}
 		if behind > 1 {
 			f.Severity, f.Count = Low, min(behind-1, 3)

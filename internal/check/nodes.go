@@ -14,7 +14,7 @@ import (
 type kubeletSkew struct{}
 
 func (kubeletSkew) ID() string       { return "kubelet-skew" }
-func (kubeletSkew) Category() string { return UpToDate }
+func (kubeletSkew) Category() string { return Versions }
 
 func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	server := minorInt(minor(s.ServerVersion))
@@ -29,7 +29,7 @@ func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if behind > 2 {
 			sev = High
 		}
-		out = append(out, Finding{ID: "kubelet-skew", Category: UpToDate, Severity: sev,
+		out = append(out, Finding{ID: "kubelet-skew", Category: Versions, Severity: sev,
 			Resource: "node " + n.Name, What: "kubelet " + trimV(kv) + " is " + plural(behind, "minor") + " behind API server",
 			Fix: "upgrade node"})
 	}
@@ -39,13 +39,13 @@ func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type kernelEOL struct{}
 
 func (kernelEOL) ID() string       { return "kernel-eol" }
-func (kernelEOL) Category() string { return UpToDate }
+func (kernelEOL) Category() string { return Versions }
 
 func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		kv := n.Status.NodeInfo.KernelVersion
-		f := Finding{ID: "kernel-eol", Category: UpToDate, Resource: "node " + n.Name}
+		f := Finding{ID: "kernel-eol", Category: Versions, Resource: "node " + n.Name}
 		k, ok := s.Tables.Kernel.Find(minor(kv))
 		if !ok {
 			continue // non-LTS: reported on the node-info line
@@ -72,13 +72,13 @@ func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type osEOL struct{}
 
 func (osEOL) ID() string       { return "os-eol" }
-func (osEOL) Category() string { return UpToDate }
+func (osEOL) Category() string { return Versions }
 
 func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		img := n.Status.NodeInfo.OSImage
-		f := Finding{ID: "os-eol", Category: UpToDate, Resource: "node " + n.Name}
+		f := Finding{ID: "os-eol", Category: Versions, Resource: "node " + n.Name}
 		d, ok := s.Tables.OS.Match(img)
 		if !ok {
 			continue // unknown OS: reported on the node-info line
@@ -99,7 +99,7 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type nodeInfo struct{}
 
 func (nodeInfo) ID() string       { return "node-info" }
-func (nodeInfo) Category() string { return UpToDate }
+func (nodeInfo) Category() string { return Versions }
 
 func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	type group struct {
@@ -136,7 +136,7 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if len(g.nodes) > 1 {
 			res = fmtInt(len(g.nodes)) + " nodes"
 		}
-		out = append(out, Finding{ID: "node-info", Category: UpToDate, Severity: Info, Resource: res, What: what})
+		out = append(out, Finding{ID: "node-info", Category: Versions, Severity: Info, Resource: res, What: what})
 	}
 	return out
 }

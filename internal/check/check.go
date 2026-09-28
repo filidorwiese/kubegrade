@@ -21,15 +21,15 @@ const (
 
 // Categories answer a question each: is it current, is it tidy, is it up.
 const (
-	UpToDate = "up-to-date"
+	Versions = "versions"
 	Hygiene  = "hygiene"
 	Health   = "health"
 )
 
-var Categories = []string{UpToDate, Hygiene, Health}
+var Categories = []string{Versions, Hygiene, Health}
 
 var CategoryNames = map[string]string{
-	UpToDate: "Up to date",
+	Versions: "Versions",
 	Hygiene:  "Hygiene",
 	Health:   "Health",
 }

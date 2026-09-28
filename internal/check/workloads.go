@@ -114,7 +114,7 @@ func parseImage(img string) imageRef {
 type chartOutdated struct{}
 
 func (chartOutdated) ID() string       { return "chart-outdated" }
-func (chartOutdated) Category() string { return UpToDate }
+func (chartOutdated) Category() string { return Versions }
 
 func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -122,7 +122,7 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		res := "helm " + r.Namespace + "/" + r.Name
 		up, ok := s.ChartLatest[r.Chart]
 		if !ok {
-			out = append(out, Finding{ID: "chart-unresolved", Category: UpToDate, Severity: Info,
+			out = append(out, Finding{ID: "chart-unresolved", Category: Versions, Severity: Info,
 				Resource: res, What: "chart " + r.Chart + " not found on Artifact Hub", Fix: "map it in internal/data/charts.yaml"})
 			continue
 		}
@@ -131,7 +131,7 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if !okCur || !okUp || !cur.Less(latest) {
 			continue
 		}
-		f := Finding{ID: "chart-outdated", Category: UpToDate, Resource: res, Fix: "helm upgrade to " + up.Version}
+		f := Finding{ID: "chart-outdated", Category: Versions, Resource: res, Fix: "helm upgrade to " + up.Version}
 		switch {
 		case latest.Major > cur.Major:
 			f.Severity = Medium
