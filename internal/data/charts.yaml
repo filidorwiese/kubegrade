@@ -22,6 +22,10 @@ charts:
     repo: https://grafana.github.io/helm-charts
   - name: argo-cd
     repo: https://argoproj.github.io/argo-helm
+  - name: argocd-image-updater
+    repo: https://argoproj.github.io/argo-helm
+  - name: kured
+    repo: https://kubereboot.github.io/charts
   - name: longhorn
     repo: https://charts.longhorn.io
   - name: cilium
