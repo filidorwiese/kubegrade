@@ -1,7 +1,6 @@
 # Override for chart -> Helm repo URL. Charts are resolved through Artifact
 # Hub by default; add an entry here for private repos or when Artifact Hub
 # picks the wrong package for an ambiguous name.
-generated: 2026-09-28
 charts: []
 # Example:
 #   - name: my-internal-chart

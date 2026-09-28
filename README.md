@@ -1,82 +1,45 @@
 # kubegrade
 
-Free, open-source CLI that scans a Kubernetes cluster through your kubeconfig
-and prints findings plus a letter grade. Built for k3s, works on any cluster.
-Read-only. It fetches public EOL tables from endoflife.date and Helm repo
-`index.yaml` files; nothing about your cluster is sent anywhere.
-
-See `PRD.md` for the decisions behind it.
-
-## Run
+Grades a Kubernetes cluster from your kubeconfig. Read-only, one scan per
+run, nothing about the cluster leaves your machine. Version data comes from
+endoflife.date and Artifact Hub.
 
 ```sh
-go run ./cmd/kubegrade
+go run ./cmd/kubegrade            # current context
+go run ./cmd/kubegrade -v         # include info findings
 go run ./cmd/kubegrade --format json
-go run ./cmd/kubegrade --kubeconfig ~/.kube/other
 ```
 
-One scan per invocation. Flags: `--format text|json`, `-v` (show info
-findings), `--no-color`, `--cluster-name` (defaults to the current context),
-`--kubeconfig` (defaults to `$KUBECONFIG` or `~/.kube/config`).
+Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color`.
+Needs cluster-wide read access, including Helm release secrets.
 
-Text output groups findings by category, severe first. Info findings are
-hidden unless `-v` is given; JSON always contains everything, including a
-`link` per finding where one exists.
+```
+GRADE  B   (84)   capped by: Hygiene
 
-`task build` puts a static binary in `bin/kubegrade`.
+VERSIONS  89
+  medium  helm traefik/traefik    major 41.6.0 available, have 40.3.0  major upgrade, read the changelog first
+  low     helm kube-system/kured  1 minor behind 6.1.0, have 6.0.0     helm upgrade to 6.1.0
+  2 info hidden, -v to show
 
-## Grading
+HYGIENE  81
+  medium  deploy shop/checkout    image checkout-api:latest            pin a version tag
+  low     node worker2            kernel 6.12.63 differs from 4 nodes on 6.12.107  pending reboot or upgrade
 
-Three categories of 100 points, each answering one question:
+HEALTH  83
+  medium  deploy shop/plausible   CrashLoopBackOff 1/1 pods, 5 restarts (exit 1)  kubectl logs -p
 
-- **Versions**: Kubernetes, kernel, OS support windows; chart versions;
-  kubelet skew.
-- **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm
-  revision pile-up, drift between nodes.
-- **Health**: crash loops, frequent restarts, pending pods, unavailable
-  deployments, failed Helm releases, NotReady nodes, full volumes.
+LINKS
+  helm traefik/traefik: https://github.com/traefik/traefik-helm-chart
+```
 
-Findings deduct info 0, low 3, medium 8, high 15, critical 30. Overall is the average, capped at the worst category's
-letter, with the score clamped to the top of that band.
+Three categories, 100 points each. Findings deduct low 3, medium 8, high 15,
+critical 30. Overall is the average, never better than the worst category.
+A+ 95, A 85, B 70, C 55, D 40, else F.
 
-A+ 95-100, A 85-94, B 70-84, C 55-69, D 40-54, F 0-39.
+- **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream.
+- **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift.
+- **Health**: crash loops, frequent restarts, pending pods, unavailable deployments, failed releases, NotReady nodes, full volumes.
 
-## Data
-
-Kubernetes, kernel and OS EOL dates come from endoflife.date at startup. If
-that fetch fails the run exits with an error. Pluto's `versions.yaml`
-(Apache-2.0, vendored unchanged apart from a header) is embedded;
-`task refresh-data` re-vendors it.
-
-Each Helm release is compared against its upstream chart version. Releases
-don't record their repo, so charts are looked up on Artifact Hub by name.
-When several packages share a name, the release's `home` and `sources` from
-Chart.yaml pick the right one; failing that the official package, then the
-best-ranked one is used and the finding says it was guessed.
-`internal/data/charts.yaml` overrides the lookup for private repos or wrong
-guesses. Charts not found anywhere show as info.
-
-## Permissions
-
-The kubeconfig user needs read access, cluster-wide, to: nodes, nodes/proxy,
-pods, namespaces, persistentvolumeclaims, secrets, deployments, replicasets,
-and list on whatever deprecated API groups the Pluto table names.
-Cluster-admin covers it.
-
-`secrets` is the sensitive one. The tool lists only secrets matching
-`owner=helm` + `type=helm.sh/release.v1`, via label and field selectors in
-the code. It decodes the release payload in memory and never prints secret
-contents.
-
-## Known limitations
-
-- A single run cannot measure how long a CrashLoopBackOff or a full PVC has
-  lasted. Severity uses restart count and fill percentage instead. Pending
-  pods, unavailable deployments and NotReady nodes use real API timestamps.
-- Single-node clusters make half the node checks trivially pass.
-- Deprecated API detection relies on `managedFields` and the last-applied
-  annotation; objects written by clients that set neither are invisible.
-- Reboot-required, pending OS updates and node-local disk pressure need
-  host access. Out of scope.
-- No CVE data, no image tag lookups. OCI-hosted charts are not resolved.
-- Flatcar is matched but has no EOL data on endoflife.date.
+Charts are resolved on Artifact Hub by name; `internal/data/charts.yaml`
+overrides the repo for private or ambiguous charts. `task refresh-data`
+re-vendors the Pluto deprecation table (Apache-2.0).

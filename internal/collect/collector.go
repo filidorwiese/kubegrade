@@ -18,7 +18,6 @@ import (
 type Collector struct {
 	cs     kubernetes.Interface
 	dyn    dynamic.Interface
-	cfg    *rest.Config
 	tables *data.Tables
 	log    *slog.Logger
 	report progress.Func
@@ -33,7 +32,7 @@ func New(cfg *rest.Config, tables *data.Tables, log *slog.Logger, report progres
 	if err != nil {
 		return nil, err
 	}
-	return &Collector{cs: cs, dyn: dyn, cfg: cfg, tables: tables, log: log, report: report}, nil
+	return &Collector{cs: cs, dyn: dyn, tables: tables, log: log, report: report}, nil
 }
 
 // Collect builds the snapshot. Core list calls are fatal; everything else

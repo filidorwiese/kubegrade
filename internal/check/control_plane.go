@@ -11,9 +11,6 @@ import (
 // k8sVersion covers both the EOL window and versions-behind-latest.
 type k8sVersion struct{}
 
-func (k8sVersion) ID() string       { return "k8s-version-eol" }
-func (k8sVersion) Category() string { return Versions }
-
 func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	tbl := s.Tables.Kubernetes
 	cur := minor(s.ServerVersion)
@@ -61,9 +58,6 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 }
 
 type k8sDeprecated struct{}
-
-func (k8sDeprecated) ID() string       { return "k8s-api-deprecated" }
-func (k8sDeprecated) Category() string { return Hygiene }
 
 func (k8sDeprecated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	next := minorInt(minor(s.ServerVersion)) + 1

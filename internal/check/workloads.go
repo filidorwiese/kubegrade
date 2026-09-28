@@ -13,9 +13,6 @@ import (
 
 type helmStatus struct{}
 
-func (helmStatus) ID() string       { return "helm-status" }
-func (helmStatus) Category() string { return Health }
-
 func (helmStatus) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, r := range s.HelmReleases {
@@ -45,9 +42,6 @@ var k3sBundled = map[string]bool{
 }
 
 type imageTags struct{}
-
-func (imageTags) ID() string       { return "image-tag-latest" }
-func (imageTags) Category() string { return Hygiene }
 
 func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -120,9 +114,6 @@ func parseImage(img string) imageRef {
 }
 
 type chartOutdated struct{}
-
-func (chartOutdated) ID() string       { return "chart-outdated" }
-func (chartOutdated) Category() string { return Versions }
 
 func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding

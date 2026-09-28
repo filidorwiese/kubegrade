@@ -23,9 +23,8 @@ type Kubernetes struct {
 }
 
 type K8sVersion struct {
-	Minor    string
-	Released string
-	EOL      string
+	Minor string
+	EOL   string
 }
 
 type Kernel struct {
@@ -66,8 +65,7 @@ type Deprecation struct {
 // Charts maps chart names to their Helm repo, needed because a release
 // secret does not record where the chart came from.
 type Charts struct {
-	Generated string  `json:"generated"`
-	Charts    []Chart `json:"charts"`
+	Charts []Chart `json:"charts"`
 }
 
 type Chart struct {

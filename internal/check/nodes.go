@@ -13,9 +13,6 @@ import (
 
 type kubeletSkew struct{}
 
-func (kubeletSkew) ID() string       { return "kubelet-skew" }
-func (kubeletSkew) Category() string { return Versions }
-
 func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	server := minorInt(minor(s.ServerVersion))
 	var out []Finding
@@ -37,9 +34,6 @@ func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 }
 
 type kernelEOL struct{}
-
-func (kernelEOL) ID() string       { return "kernel-eol" }
-func (kernelEOL) Category() string { return Versions }
 
 // shortKernel drops the distro build suffix: "6.12.63+deb13-amd64" -> "6.12.63".
 func shortKernel(v string) string {
@@ -79,9 +73,6 @@ func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 
 type osEOL struct{}
 
-func (osEOL) ID() string       { return "os-eol" }
-func (osEOL) Category() string { return Versions }
-
 func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
@@ -105,9 +96,6 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 // runtime share one line, so a uniform cluster is one row and any odd one
 // out stands alone next to its node-drift finding.
 type nodeInfo struct{}
-
-func (nodeInfo) ID() string       { return "node-info" }
-func (nodeInfo) Category() string { return Versions }
 
 func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	type group struct {
@@ -153,9 +141,6 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 // the majority. Skipped on single-node clusters.
 type nodeDrift struct{}
 
-func (nodeDrift) ID() string       { return "node-drift" }
-func (nodeDrift) Category() string { return Hygiene }
-
 func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	if len(s.Nodes) < 2 {
 		return nil
@@ -199,9 +184,6 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 }
 
 type nodeNotReady struct{}
-
-func (nodeNotReady) ID() string       { return "node-notready" }
-func (nodeNotReady) Category() string { return Health }
 
 func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding

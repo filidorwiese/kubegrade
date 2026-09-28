@@ -51,8 +51,6 @@ type Finding struct {
 }
 
 type Check interface {
-	ID() string
-	Category() string
 	Run(ctx context.Context, s *collect.Snapshot) []Finding
 }
 

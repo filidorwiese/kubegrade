@@ -116,7 +116,7 @@ func buildKubernetes(cycles []cycle) Kubernetes {
 		if !strings.HasPrefix(c.Cycle, "1.") {
 			continue
 		}
-		k.Versions = append(k.Versions, K8sVersion{Minor: c.Cycle, Released: c.ReleaseDate, EOL: c.eolDate()})
+		k.Versions = append(k.Versions, K8sVersion{Minor: c.Cycle, EOL: c.eolDate()})
 	}
 	sort.Slice(k.Versions, func(i, j int) bool { return MinorLess(k.Versions[i].Minor, k.Versions[j].Minor) })
 	if n := len(k.Versions); n > 0 {

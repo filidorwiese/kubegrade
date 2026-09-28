@@ -35,14 +35,13 @@ type Snapshot struct {
 }
 
 type HelmRelease struct {
-	Namespace  string
-	Name       string
-	Revision   int
-	Revisions  int
-	Status     string
-	Chart      string
-	Version    string
-	AppVersion string
+	Namespace string
+	Name      string
+	Revision  int
+	Revisions int
+	Status    string
+	Chart     string
+	Version   string
 	// Home and Sources come from Chart.yaml and are used to pick the right
 	// Artifact Hub package when several share the chart name.
 	Home     string
@@ -57,8 +56,6 @@ type ChartUpstream struct {
 	// Source is the chart's source link, usually the repo holding the
 	// changelog. Empty when unknown.
 	Source string
-	// Via is "charts.yaml" or "artifacthub".
-	Via string
 	// Guessed is set when several Artifact Hub packages share the name and
 	// none matched the release's home/sources; the best-ranked one was used.
 	Guessed bool

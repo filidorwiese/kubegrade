@@ -13,9 +13,6 @@ import (
 
 type crashLoop struct{}
 
-func (crashLoop) ID() string       { return "pod-crashloop" }
-func (crashLoop) Category() string { return Health }
-
 // crashLoop groups crash-looping pods by owner. A single run cannot measure
 // how long the loop has lasted, so restart count stands in for duration.
 func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
@@ -69,22 +66,24 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 
 // ownerOf resolves pod -> ReplicaSet -> Deployment, else the direct owner.
 func ownerOf(p corev1.Pod, rss []appsv1.ReplicaSet) string {
-	for _, ref := range p.OwnerReferences {
-		if ref.Kind == "ReplicaSet" {
-			for _, rs := range rss {
-				if rs.Namespace == p.Namespace && rs.Name == ref.Name {
-					for _, rref := range rs.OwnerReferences {
-						if rref.Kind == "Deployment" {
-							return "deploy " + p.Namespace + "/" + rref.Name
-						}
-					}
-				}
-			}
-			return "rs " + p.Namespace + "/" + ref.Name
-		}
+	if len(p.OwnerReferences) == 0 {
+		return "pod " + p.Namespace + "/" + p.Name
+	}
+	ref := p.OwnerReferences[0]
+	if ref.Kind != "ReplicaSet" {
 		return kindPrefix(ref.Kind) + " " + p.Namespace + "/" + ref.Name
 	}
-	return "pod " + p.Namespace + "/" + p.Name
+	for _, rs := range rss {
+		if rs.Namespace != p.Namespace || rs.Name != ref.Name {
+			continue
+		}
+		for _, rref := range rs.OwnerReferences {
+			if rref.Kind == "Deployment" {
+				return "deploy " + p.Namespace + "/" + rref.Name
+			}
+		}
+	}
+	return "rs " + p.Namespace + "/" + ref.Name
 }
 
 func kindPrefix(kind string) string {
@@ -103,9 +102,6 @@ func kindPrefix(kind string) string {
 // CrashLoopBackOff (those are covered by crashLoop). Restart count is
 // cumulative, so recency of the last termination decides the severity.
 type podRestarts struct{}
-
-func (podRestarts) ID() string       { return "pod-restarts" }
-func (podRestarts) Category() string { return Health }
 
 const restartThreshold = 5
 
@@ -237,9 +233,6 @@ func (r termReason) fix(fallback string) string {
 
 type podPending struct{}
 
-func (podPending) ID() string       { return "pod-pending" }
-func (podPending) Category() string { return Health }
-
 func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, p := range s.Pods {
@@ -259,9 +252,6 @@ func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 }
 
 type deployUnavailable struct{}
-
-func (deployUnavailable) ID() string       { return "deploy-unavailable" }
-func (deployUnavailable) Category() string { return Health }
 
 func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	// A crash-looping deployment is unavailable by definition; one finding.
@@ -305,9 +295,6 @@ func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 }
 
 type pvcUsage struct{}
-
-func (pvcUsage) ID() string       { return "pvc-usage" }
-func (pvcUsage) Category() string { return Health }
 
 func (pvcUsage) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	seen := map[string]bool{}

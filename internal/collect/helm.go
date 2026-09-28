@@ -27,11 +27,10 @@ type releaseJSON struct {
 	} `json:"info"`
 	Chart struct {
 		Metadata struct {
-			Name       string   `json:"name"`
-			Version    string   `json:"version"`
-			AppVersion string   `json:"appVersion"`
-			Home       string   `json:"home"`
-			Sources    []string `json:"sources"`
+			Name    string   `json:"name"`
+			Version string   `json:"version"`
+			Home    string   `json:"home"`
+			Sources []string `json:"sources"`
 		} `json:"metadata"`
 	} `json:"chart"`
 }
@@ -70,17 +69,16 @@ func (c *Collector) helmReleases(ctx context.Context, s *Snapshot) error {
 			continue
 		}
 		s.HelmReleases = append(s.HelmReleases, HelmRelease{
-			Namespace:  k.ns,
-			Name:       k.name,
-			Revision:   rel.Version,
-			Revisions:  count[k],
-			Status:     rel.Info.Status,
-			Chart:      rel.Chart.Metadata.Name,
-			Version:    rel.Chart.Metadata.Version,
-			AppVersion: rel.Chart.Metadata.AppVersion,
-			Home:       rel.Chart.Metadata.Home,
-			Sources:    rel.Chart.Metadata.Sources,
-			Deployed:   rel.Info.LastDeployed,
+			Namespace: k.ns,
+			Name:      k.name,
+			Revision:  rel.Version,
+			Revisions: count[k],
+			Status:    rel.Info.Status,
+			Chart:     rel.Chart.Metadata.Name,
+			Version:   rel.Chart.Metadata.Version,
+			Home:      rel.Chart.Metadata.Home,
+			Sources:   rel.Chart.Metadata.Sources,
+			Deployed:  rel.Info.LastDeployed,
 		})
 	}
 	return nil

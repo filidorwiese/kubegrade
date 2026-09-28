@@ -109,7 +109,7 @@ func resolveIndex(ctx context.Context, r HelmRelease, repo string, cache map[str
 	if !ok {
 		return nil
 	}
-	up.Repo, up.Via = repo, "charts.yaml"
+	up.Repo = repo
 	return &up
 }
 
@@ -228,7 +228,7 @@ func resolveArtifactHub(ctx context.Context, r HelmRelease) (*ChartUpstream, err
 }
 
 func fromDetail(d ahDetail) ChartUpstream {
-	up := ChartUpstream{Version: d.Version, Repo: d.Repository.URL, Via: "artifacthub"}
+	up := ChartUpstream{Version: d.Version, Repo: d.Repository.URL}
 	var best data.Version
 	for _, av := range d.AvailableVersions {
 		v, ok := data.ParseVersion(av.Version)
@@ -352,22 +352,4 @@ func newestStable(idx *repoIndex, chart string) (ChartUpstream, bool) {
 		}
 	}
 	return best, found
-}
-
-// ResolveChart is a convenience for tooling: resolve one release the same
-// way a scan does, without a cluster.
-func ResolveChart(ctx context.Context, tables *data.Tables, r HelmRelease) (*ChartUpstream, error) {
-	if repo, ok := tables.Charts.Repo(r.Chart); ok {
-		idx, err := fetchIndex(ctx, repo)
-		if err != nil {
-			return nil, err
-		}
-		up, ok := newestStable(idx, r.Chart)
-		if !ok {
-			return nil, fmt.Errorf("chart %s not in index", r.Chart)
-		}
-		up.Repo, up.Via = repo, "charts.yaml"
-		return &up, nil
-	}
-	return resolveArtifactHub(ctx, r)
 }

@@ -16,9 +16,8 @@ type Func func(phase string, done, total int)
 func Nop(string, int, int) {}
 
 type Bar struct {
-	mu   sync.Mutex
-	w    io.Writer
-	last string
+	mu sync.Mutex
+	w  io.Writer
 }
 
 // New returns a bar writing to stderr, or a no-op when stderr isn't a tty.
@@ -46,7 +45,6 @@ func (b *Bar) Update(phase string, done, total int) {
 		line = fmt.Sprintf("[%s] %s", strings.Repeat(" ", width), phase)
 	}
 	fmt.Fprintf(b.w, "\r\033[K%s", line)
-	b.last = line
 }
 
 // Done clears the bar so the report starts on a clean line.
