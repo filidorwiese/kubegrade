@@ -19,20 +19,19 @@ const (
 	Critical Severity = "critical"
 )
 
+// Categories answer a question each: is it current, is it tidy, is it up.
 const (
-	ControlPlane = "control-plane"
-	Workloads    = "workloads"
-	Nodes        = "nodes"
-	Sustained    = "sustained"
+	UpToDate = "up-to-date"
+	Hygiene  = "hygiene"
+	Health   = "health"
 )
 
-var Categories = []string{ControlPlane, Workloads, Nodes, Sustained}
+var Categories = []string{UpToDate, Hygiene, Health}
 
 var CategoryNames = map[string]string{
-	ControlPlane: "Control plane",
-	Workloads:    "Workloads",
-	Nodes:        "Nodes",
-	Sustained:    "Sustained conditions",
+	UpToDate: "Up to date",
+	Hygiene:  "Hygiene",
+	Health:   "Health",
 }
 
 type Finding struct {

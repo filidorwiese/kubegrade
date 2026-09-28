@@ -14,7 +14,7 @@ import (
 type helmStatus struct{}
 
 func (helmStatus) ID() string       { return "helm-status" }
-func (helmStatus) Category() string { return Workloads }
+func (helmStatus) Category() string { return Health }
 
 func (helmStatus) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -23,16 +23,16 @@ func (helmStatus) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		rev := " (rev " + fmtInt(r.Revision) + ")"
 		switch {
 		case r.Status == "failed":
-			out = append(out, Finding{ID: "helm-status", Category: Workloads, Severity: Medium,
+			out = append(out, Finding{ID: "helm-status", Category: Health, Severity: Medium,
 				Resource: res, What: "status failed" + rev, Fix: "helm rollback or reinstall"})
 		case strings.HasPrefix(r.Status, "pending-") && s.ScannedAt.Sub(r.Deployed) > time.Hour:
 			since := r.Deployed
-			out = append(out, Finding{ID: "helm-status", Category: Workloads, Severity: Low,
+			out = append(out, Finding{ID: "helm-status", Category: Health, Severity: Low,
 				Resource: res, What: "status " + r.Status + " for " + humanDuration(s.ScannedAt.Sub(since)) + rev,
 				Fix: "helm rollback or reinstall", Since: &since})
 		}
 		if r.Revisions > 10 {
-			out = append(out, Finding{ID: "helm-revisions", Category: Workloads, Severity: Info,
+			out = append(out, Finding{ID: "helm-revisions", Category: Hygiene, Severity: Info,
 				Resource: res, What: fmtInt(r.Revisions) + " revisions kept", Fix: "helm history / --history-max"})
 		}
 	}
@@ -47,7 +47,7 @@ var k3sBundled = map[string]bool{
 type imageTags struct{}
 
 func (imageTags) ID() string       { return "image-tag-latest" }
-func (imageTags) Category() string { return Workloads }
+func (imageTags) Category() string { return Hygiene }
 
 func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -71,13 +71,13 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			noDigest++
 		}
 		if len(unpinned) > 0 {
-			out = append(out, Finding{ID: "image-tag-latest", Category: Workloads, Severity: Medium,
+			out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Medium,
 				Resource: "deploy " + d.Namespace + "/" + d.Name,
 				What:     "image " + strings.Join(unpinned, ", "), Fix: "pin a version tag"})
 		}
 	}
 	if noDigest > 0 {
-		out = append(out, Finding{ID: "image-no-digest", Category: Workloads, Severity: Info,
+		out = append(out, Finding{ID: "image-no-digest", Category: Hygiene, Severity: Info,
 			Resource: "deployments", What: "images by tag without digest: " + plural(noDigest, "deployment")})
 	}
 	return out
@@ -114,7 +114,7 @@ func parseImage(img string) imageRef {
 type chartOutdated struct{}
 
 func (chartOutdated) ID() string       { return "chart-outdated" }
-func (chartOutdated) Category() string { return Workloads }
+func (chartOutdated) Category() string { return UpToDate }
 
 func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -122,7 +122,7 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		res := "helm " + r.Namespace + "/" + r.Name
 		up, ok := s.ChartLatest[r.Chart]
 		if !ok {
-			out = append(out, Finding{ID: "chart-unresolved", Category: Workloads, Severity: Info,
+			out = append(out, Finding{ID: "chart-unresolved", Category: UpToDate, Severity: Info,
 				Resource: res, What: "chart " + r.Chart + " not found on Artifact Hub", Fix: "map it in internal/data/charts.yaml"})
 			continue
 		}
@@ -131,7 +131,7 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if !okCur || !okUp || !cur.Less(latest) {
 			continue
 		}
-		f := Finding{ID: "chart-outdated", Category: Workloads, Resource: res, Fix: "helm upgrade to " + up.Version}
+		f := Finding{ID: "chart-outdated", Category: UpToDate, Resource: res, Fix: "helm upgrade to " + up.Version}
 		switch {
 		case latest.Major > cur.Major:
 			f.Severity = Medium

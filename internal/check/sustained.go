@@ -14,7 +14,7 @@ import (
 type crashLoop struct{}
 
 func (crashLoop) ID() string       { return "pod-crashloop" }
-func (crashLoop) Category() string { return Sustained }
+func (crashLoop) Category() string { return Health }
 
 // crashLoop groups crash-looping pods by owner. A single run cannot measure
 // how long the loop has lasted, so restart count stands in for duration.
@@ -54,7 +54,7 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if g.restarts >= 20 {
 			sev = High
 		}
-		out = append(out, Finding{ID: "pod-crashloop", Category: Sustained, Severity: sev, Resource: owner,
+		out = append(out, Finding{ID: "pod-crashloop", Category: Health, Severity: sev, Resource: owner,
 			What: "CrashLoopBackOff " + fmtInt(g.pods) + "/" + fmtInt(owned[owner]) + " pods, " + fmtInt(int(g.restarts)) + " restarts",
 			Fix:  "kubectl logs -p"})
 	}
@@ -97,7 +97,7 @@ func kindPrefix(kind string) string {
 type podPending struct{}
 
 func (podPending) ID() string       { return "pod-pending" }
-func (podPending) Category() string { return Sustained }
+func (podPending) Category() string { return Health }
 
 func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -110,7 +110,7 @@ func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if dur < time.Hour {
 			continue
 		}
-		out = append(out, Finding{ID: "pod-pending", Category: Sustained, Severity: Medium,
+		out = append(out, Finding{ID: "pod-pending", Category: Health, Severity: Medium,
 			Resource: "pod " + p.Namespace + "/" + p.Name, What: "Pending for " + humanDuration(dur),
 			Fix: "kubectl describe pod", Since: &since})
 	}
@@ -120,7 +120,7 @@ func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type deployUnavailable struct{}
 
 func (deployUnavailable) ID() string       { return "deploy-unavailable" }
-func (deployUnavailable) Category() string { return Sustained }
+func (deployUnavailable) Category() string { return Health }
 
 func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -143,7 +143,7 @@ func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if dur > 24*time.Hour {
 			sev = Medium
 		}
-		out = append(out, Finding{ID: "deploy-unavailable", Category: Sustained, Severity: sev,
+		out = append(out, Finding{ID: "deploy-unavailable", Category: Health, Severity: sev,
 			Resource: "deploy " + d.Namespace + "/" + d.Name,
 			What:     fmtInt(int(d.Status.AvailableReplicas)) + "/" + fmtInt(int(want)) + " available for " + humanDuration(dur),
 			Fix:      "kubectl rollout status", Since: &since})
@@ -154,7 +154,7 @@ func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type pvcUsage struct{}
 
 func (pvcUsage) ID() string       { return "pvc-usage" }
-func (pvcUsage) Category() string { return Sustained }
+func (pvcUsage) Category() string { return Health }
 
 func (pvcUsage) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	seen := map[string]bool{}
@@ -173,7 +173,7 @@ func (pvcUsage) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if pct >= 95 {
 			sev = High
 		}
-		out = append(out, Finding{ID: "pvc-usage", Category: Sustained, Severity: sev,
+		out = append(out, Finding{ID: "pvc-usage", Category: Health, Severity: sev,
 			Resource: "pvc " + key, What: fmtInt(pct) + "% used",
 			Fix: "expand the volume or prune data"})
 	}

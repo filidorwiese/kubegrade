@@ -14,7 +14,7 @@ import (
 type kubeletSkew struct{}
 
 func (kubeletSkew) ID() string       { return "kubelet-skew" }
-func (kubeletSkew) Category() string { return Nodes }
+func (kubeletSkew) Category() string { return UpToDate }
 
 func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	server := minorInt(minor(s.ServerVersion))
@@ -29,7 +29,7 @@ func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if behind > 2 {
 			sev = High
 		}
-		out = append(out, Finding{ID: "kubelet-skew", Category: Nodes, Severity: sev,
+		out = append(out, Finding{ID: "kubelet-skew", Category: UpToDate, Severity: sev,
 			Resource: "node " + n.Name, What: "kubelet " + trimV(kv) + " is " + plural(behind, "minor") + " behind API server",
 			Fix: "upgrade node"})
 	}
@@ -39,13 +39,13 @@ func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type kernelEOL struct{}
 
 func (kernelEOL) ID() string       { return "kernel-eol" }
-func (kernelEOL) Category() string { return Nodes }
+func (kernelEOL) Category() string { return UpToDate }
 
 func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		kv := n.Status.NodeInfo.KernelVersion
-		f := Finding{ID: "kernel-eol", Category: Nodes, Resource: "node " + n.Name}
+		f := Finding{ID: "kernel-eol", Category: UpToDate, Resource: "node " + n.Name}
 		k, ok := s.Tables.Kernel.Find(minor(kv))
 		if !ok {
 			continue // non-LTS: reported on the node-info line
@@ -72,13 +72,13 @@ func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type osEOL struct{}
 
 func (osEOL) ID() string       { return "os-eol" }
-func (osEOL) Category() string { return Nodes }
+func (osEOL) Category() string { return UpToDate }
 
 func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		img := n.Status.NodeInfo.OSImage
-		f := Finding{ID: "os-eol", Category: Nodes, Resource: "node " + n.Name}
+		f := Finding{ID: "os-eol", Category: UpToDate, Resource: "node " + n.Name}
 		d, ok := s.Tables.OS.Match(img)
 		if !ok {
 			continue // unknown OS: reported on the node-info line
@@ -98,7 +98,7 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type nodeInfo struct{}
 
 func (nodeInfo) ID() string       { return "node-info" }
-func (nodeInfo) Category() string { return Nodes }
+func (nodeInfo) Category() string { return UpToDate }
 
 func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -114,7 +114,7 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		} else {
 			kernel += " not LTS"
 		}
-		out = append(out, Finding{ID: "node-info", Category: Nodes, Severity: Info,
+		out = append(out, Finding{ID: "node-info", Category: UpToDate, Severity: Info,
 			Resource: "node " + n.Name, What: os + ", " + kernel + ", " + ni.ContainerRuntimeVersion})
 	}
 	return out
@@ -125,7 +125,7 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type nodeDrift struct{}
 
 func (nodeDrift) ID() string       { return "node-drift" }
-func (nodeDrift) Category() string { return Nodes }
+func (nodeDrift) Category() string { return Hygiene }
 
 func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	if len(s.Nodes) < 2 {
@@ -160,7 +160,7 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			if v == majority {
 				continue
 			}
-			out = append(out, Finding{ID: "node-drift", Category: Nodes, Severity: Low,
+			out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: Low,
 				Resource: "node " + n.Name,
 				What:     f.label + " " + v + " differs from " + plural(majorityN, "node") + " on " + majority,
 				Fix:      "pending reboot or upgrade"})
@@ -172,7 +172,7 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type nodeNotReady struct{}
 
 func (nodeNotReady) ID() string       { return "node-notready" }
-func (nodeNotReady) Category() string { return Nodes }
+func (nodeNotReady) Category() string { return Health }
 
 func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
@@ -187,7 +187,7 @@ func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			if dur > 24*time.Hour {
 				sev = High
 			}
-			out = append(out, Finding{ID: "node-notready", Category: Nodes, Severity: sev,
+			out = append(out, Finding{ID: "node-notready", Category: Health, Severity: sev,
 				Resource: "node " + n.Name, What: "NotReady for " + humanDuration(dur) + " (" + strings.TrimSpace(c.Reason) + ")",
 				Fix: "kubectl describe node", Since: &since})
 		}
