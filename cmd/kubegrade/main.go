@@ -69,6 +69,7 @@ func run(o options, log *slog.Logger) error {
 		o.clusterName = ctxName
 	}
 
+	fmt.Fprintf(os.Stderr, "cluster: %s (%s)\n", o.clusterName, cfg.Host)
 	bar, tick := progress.New()
 	defer bar.Done()
 
