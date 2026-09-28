@@ -41,7 +41,7 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	s := &Snapshot{ScannedAt: time.Now().UTC(), Tables: c.tables}
 	all := metav1.ListOptions{}
 	const phase = "collecting cluster data"
-	step, total := 0, 9
+	step, total := 0, 10
 	tick := func() {
 		step++
 		c.report(phase, step, total)
@@ -81,6 +81,13 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("list replicasets: %w", err)
 	}
 	s.ReplicaSets = rss.Items
+	tick()
+
+	jobs, err := c.cs.BatchV1().Jobs("").List(ctx, all)
+	if err != nil {
+		return nil, fmt.Errorf("list jobs: %w", err)
+	}
+	s.Jobs = jobs.Items
 	tick()
 
 	pvcs, err := c.cs.CoreV1().PersistentVolumeClaims("").List(ctx, all)

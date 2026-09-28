@@ -61,7 +61,7 @@ func All() []Check {
 		helmStatus{}, chartOutdated{}, imageTags{},
 		kubeletSkew{}, kernelEOL{}, osEOL{}, nodeDrift{}, nodeInfo{}, nodeNotReady{},
 		crashLoop{}, podRestarts{}, podPending{}, deployUnavailable{}, pvcUsage{},
-		nodePressure{}, nodeDisk{},
+		nodePressure{}, nodeDisk{}, cruft{},
 	}
 }
 

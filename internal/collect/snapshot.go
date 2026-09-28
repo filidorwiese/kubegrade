@@ -6,6 +6,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/filidorwiese/kubegrade/internal/data"
@@ -19,6 +20,7 @@ type Snapshot struct {
 	Pods        []corev1.Pod
 	Deployments []appsv1.Deployment
 	ReplicaSets []appsv1.ReplicaSet
+	Jobs        []batchv1.Job
 	PVCs        []corev1.PersistentVolumeClaim
 
 	HelmReleases []HelmRelease
