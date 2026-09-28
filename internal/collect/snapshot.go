@@ -62,6 +62,8 @@ type ChartUpstream struct {
 	// Source is the chart's source link, usually the repo holding the
 	// changelog. Empty when unknown.
 	Source string
+	// Deprecated is the Artifact Hub flag: the maintainer abandoned it.
+	Deprecated bool
 	// Guessed is set when several Artifact Hub packages share the name and
 	// none matched the release's home/sources; the best-ranked one was used.
 	Guessed bool

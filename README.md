@@ -26,7 +26,7 @@ Needs cluster-wide read access, including Helm release secrets.
 
 ## Included tests
 
-- **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream.
+- **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream and deprecated charts.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, evicted, finished and controller-less pods.
 - **Health**: crash loops, frequent restarts, pending pods, unavailable deployments, failed releases, NotReady nodes, node pressure, full node disks and volumes.
 

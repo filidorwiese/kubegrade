@@ -125,6 +125,11 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 				Resource: res, What: "chart " + r.Chart + " not found on Artifact Hub", Fix: "map it in internal/data/charts.yaml"})
 			continue
 		}
+		if up.Deprecated && !up.Guessed {
+			out = append(out, Finding{ID: "chart-deprecated", Category: Versions, Severity: Medium,
+				Resource: res, What: "chart " + r.Chart + " is deprecated upstream",
+				Fix: "move to its successor", Link: up.Source})
+		}
 		cur, okCur := data.ParseVersion(r.Version)
 		latest, okUp := data.ParseVersion(up.Version)
 		if !okCur || !okUp || !cur.Less(latest) {

@@ -133,9 +133,10 @@ type ahPackage struct {
 }
 
 type ahDetail struct {
-	Version string `json:"version"`
-	HomeURL string `json:"home_url"`
-	Links   []struct {
+	Version    string `json:"version"`
+	Deprecated bool   `json:"deprecated"`
+	HomeURL    string `json:"home_url"`
+	Links      []struct {
 		URL string `json:"url"`
 	} `json:"links"`
 	Repository struct {
@@ -228,7 +229,7 @@ func resolveArtifactHub(ctx context.Context, r HelmRelease) (*ChartUpstream, err
 }
 
 func fromDetail(d ahDetail) ChartUpstream {
-	up := ChartUpstream{Version: d.Version, Repo: d.Repository.URL}
+	up := ChartUpstream{Version: d.Version, Repo: d.Repository.URL, Deprecated: d.Deprecated}
 	var best data.Version
 	for _, av := range d.AvailableVersions {
 		v, ok := data.ParseVersion(av.Version)
