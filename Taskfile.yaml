@@ -19,3 +19,8 @@ tasks:
     desc: Refresh embedded EOL tables from endoflife.date and Pluto
     cmds:
       - ./hack/refresh-data.sh
+
+  demo:
+    desc: Render a sample report in colour, for screenshots
+    cmds:
+      - go run ./hack/demo
