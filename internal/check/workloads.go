@@ -135,7 +135,7 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		case latest.Major > cur.Major:
 			f.Severity = Medium
 			f.What = "major " + up.Version + " available, have " + r.Version
-			f.Fix = "major upgrade, read the changelog first"
+			f.Fix = "major upgrade to " + up.Version
 			f.Link = up.Source
 		case latest.Minor > cur.Minor:
 			f.Severity = Low

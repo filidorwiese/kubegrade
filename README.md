@@ -32,7 +32,7 @@ Needs cluster-wide read access, including Helm release secrets.
 ┌──────────┬──────────┬────────────────────────┬──────────────────────────────────────┬─────────────────────────────┐
 │ Category │ Severity │ Resource               │ Finding                              │ Fix                         │
 ├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
-│ versions │ medium   │ helm traefik/traefik   │ major 41.6.0 available, have 40.3.0  │ major upgrade, read the ch… │
+│ versions │ medium   │ helm traefik/traefik   │ major 41.6.0 available, have 40.3.0  │ major upgrade to 41.6.0     │
 ├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
 │ hygiene  │ medium   │ deploy shop/checkout   │ image checkout-api:latest            │ pin a version tag           │
 ├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
