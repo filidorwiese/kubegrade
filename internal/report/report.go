@@ -71,23 +71,29 @@ func Build(in Input) Report {
 			What: f.What, Fix: f.Fix, Link: f.Link, Points: grade.Points(f), Since: f.Since,
 		})
 	}
-	// Costliest first, then category order, then resource for stable output.
+	// Most severe first so the reader sees what to fix first; category
+	// keeps related rows together within a band, the rest is for stable output.
 	catOrder := map[string]int{}
 	for i, c := range check.Categories {
 		catOrder[c] = i
 	}
 	sort.SliceStable(r.Findings, func(i, j int) bool {
 		a, b := r.Findings[i], r.Findings[j]
-		if a.Points != b.Points {
-			return a.Points > b.Points
+		if sevOrder[a.Severity] != sevOrder[b.Severity] {
+			return sevOrder[a.Severity] < sevOrder[b.Severity]
 		}
 		if catOrder[a.Category] != catOrder[b.Category] {
 			return catOrder[a.Category] < catOrder[b.Category]
+		}
+		if a.Points != b.Points {
+			return a.Points > b.Points
 		}
 		return a.Resource < b.Resource
 	})
 	return r
 }
+
+var sevOrder = map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 
 func WriteJSON(w io.Writer, r Report) error {
 	enc := json.NewEncoder(w)
@@ -187,27 +193,16 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 			links = append(links, f)
 		}
 	}
-	catOrder := map[string]int{}
-	for i, c := range check.Categories {
-		catOrder[c] = i
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if catOrder[rows[i].Category] != catOrder[rows[j].Category] {
-			return catOrder[rows[i].Category] < catOrder[rows[j].Category]
-		}
-		return rows[i].Points > rows[j].Points
-	})
-
 	if len(rows) > 0 {
 		resW, whatW, fixW := columnWidths(rows, opt.Width)
-		headers := []string{"Category", "Severity", "Resource", "Finding", "Fix"}
+		headers := []string{"Severity", "Category", "Resource", "Finding", "Fix"}
 		widths := []int{8, 8, max(resW, 8), max(whatW, 7), max(fixW, 3)}
 		var fixes []Finding
 		if fixW == 0 {
 			headers, widths = headers[:4], widths[:4]
 		}
 		cells := func(f Finding) [][]string {
-			c := [][]string{{f.Category}, {f.Severity}, wrap(f.Resource, resW), wrap(f.What, whatW)}
+			c := [][]string{{f.Severity}, {f.Category}, wrap(f.Resource, resW), wrap(f.What, whatW)}
 			if fixW > 0 {
 				c = append(c, wrap(f.Fix, fixW))
 			} else if f.Fix != "" {
@@ -259,7 +254,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 			}
 			sev := f.Severity
 			fmt.Fprintln(w, row(cells(f), func(i int, s string) string {
-				if i == 1 {
+				if i == 0 {
 					return paint(severityStyle[sev], s)
 				}
 				return s

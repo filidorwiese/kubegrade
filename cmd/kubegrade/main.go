@@ -29,16 +29,14 @@ import (
 var version = "dev"
 
 type options struct {
-	kubeconfig string
-	context    string
-	format     string
-	noColor    bool
-	verbose    bool
+	context string
+	format  string
+	noColor bool
+	verbose bool
 }
 
 func main() {
 	var o options
-	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; defaults to $KUBECONFIG or ~/.kube/config")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.context, "context", "", "kubeconfig context; defaults to the current one")
 	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
@@ -66,7 +64,7 @@ func run(o options, log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	cfg, cluster, err := loadConfig(o.kubeconfig, o.context)
+	cfg, cluster, err := loadConfig(o.context)
 	if err != nil {
 		return err
 	}
@@ -125,9 +123,8 @@ func useColor(o options) bool {
 
 // loadConfig loads the kubeconfig. The second return is the context name,
 // used as the cluster name in the report.
-func loadConfig(path, context string) (*rest.Config, string, error) {
+func loadConfig(context string) (*rest.Config, string, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	rules.ExplicitPath = path
 	overrides := &clientcmd.ConfigOverrides{CurrentContext: context}
 	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
 	cfg, err := cc.ClientConfig()
