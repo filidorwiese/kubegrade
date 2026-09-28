@@ -23,6 +23,7 @@ type Snapshot struct {
 
 	HelmReleases []HelmRelease
 	VolumeStats  []VolumeStat
+	NodeFS       []NodeFS
 	// NodeStart is the kubelet start time per node from stats/summary; on
 	// k3s that is effectively the boot time.
 	NodeStart  map[string]time.Time
@@ -62,6 +63,14 @@ type ChartUpstream struct {
 	// Guessed is set when several Artifact Hub packages share the name and
 	// none matched the release's home/sources; the best-ranked one was used.
 	Guessed bool
+}
+
+// NodeFS is a node filesystem from the kubelet: Kind "root" or "image".
+type NodeFS struct {
+	Node     string
+	Kind     string
+	Used     uint64
+	Capacity uint64
 }
 
 type VolumeStat struct {

@@ -285,3 +285,64 @@ func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	}
 	return out
 }
+
+type nodePressure struct{}
+
+// nodePressure reports kubelet pressure conditions. Disk usage itself is
+// graded by nodeDisk; a pressure flag means eviction is already happening.
+func (nodePressure) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	var out []Finding
+	for _, n := range s.Nodes {
+		for _, c := range n.Status.Conditions {
+			if c.Status != corev1.ConditionTrue || !pressureFix[c.Type] {
+				continue
+			}
+			since := c.LastTransitionTime.Time
+			out = append(out, Finding{ID: "node-pressure", Category: Health, Severity: High,
+				Resource: "node " + n.Name, What: string(c.Type) + " for " + humanDuration(s.ScannedAt.Sub(since)),
+				Fix: "pods are being evicted, free " + pressureWhat[c.Type], Since: &since})
+		}
+	}
+	return out
+}
+
+var pressureFix = map[corev1.NodeConditionType]bool{
+	corev1.NodeDiskPressure: true, corev1.NodeMemoryPressure: true, corev1.NodePIDPressure: true,
+}
+
+var pressureWhat = map[corev1.NodeConditionType]string{
+	corev1.NodeDiskPressure: "disk", corev1.NodeMemoryPressure: "memory", corev1.NodePIDPressure: "processes",
+}
+
+type nodeDisk struct{}
+
+// nodeDisk grades the node root and image filesystems like PVCs. A node
+// already under DiskPressure is reported by nodePressure instead.
+func (nodeDisk) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	pressured := map[string]bool{}
+	for _, n := range s.Nodes {
+		for _, c := range n.Status.Conditions {
+			if c.Type == corev1.NodeDiskPressure && c.Status == corev1.ConditionTrue {
+				pressured[n.Name] = true
+			}
+		}
+	}
+	var out []Finding
+	for _, fs := range s.NodeFS {
+		pct := int(fs.Used * 100 / fs.Capacity)
+		if pct < 90 || pressured[fs.Node] {
+			continue
+		}
+		sev := Medium
+		if pct >= 95 {
+			sev = High
+		}
+		fix := "free disk space"
+		if fs.Kind == "image" {
+			fix = "prune unused images"
+		}
+		out = append(out, Finding{ID: "node-disk", Category: Health, Severity: sev,
+			Resource: "node " + fs.Node, What: fs.Kind + " disk " + fmtInt(pct) + "% used", Fix: fix})
+	}
+	return out
+}

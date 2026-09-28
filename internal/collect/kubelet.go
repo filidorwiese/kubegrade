@@ -11,6 +11,10 @@ import (
 type statsSummary struct {
 	Node struct {
 		StartTime time.Time `json:"startTime"`
+		Fs        fsStats   `json:"fs"`
+		Runtime   struct {
+			ImageFs fsStats `json:"imageFs"`
+		} `json:"runtime"`
 	} `json:"node"`
 	Pods []struct {
 		Volume []struct {
@@ -24,9 +28,14 @@ type statsSummary struct {
 	} `json:"pods"`
 }
 
-// volumeStats reads PVC usage and node start time through nodes/proxy.
-// One failing node is recorded and skipped; the rest still report.
-func (c *Collector) volumeStats(ctx context.Context, s *Snapshot) error {
+type fsStats struct {
+	UsedBytes     uint64 `json:"usedBytes"`
+	CapacityBytes uint64 `json:"capacityBytes"`
+}
+
+// kubeletStats reads node disks, PVC usage and node start time through
+// nodes/proxy. One failing node is recorded and skipped; the rest still report.
+func (c *Collector) kubeletStats(ctx context.Context, s *Snapshot) error {
 	s.NodeStart = map[string]time.Time{}
 	for _, node := range s.Nodes {
 		raw, err := c.cs.CoreV1().RESTClient().Get().
@@ -44,6 +53,11 @@ func (c *Collector) volumeStats(ctx context.Context, s *Snapshot) error {
 		}
 		if !sum.Node.StartTime.IsZero() {
 			s.NodeStart[node.Name] = sum.Node.StartTime
+		}
+		for kind, fs := range map[string]fsStats{"root": sum.Node.Fs, "image": sum.Node.Runtime.ImageFs} {
+			if fs.CapacityBytes > 0 {
+				s.NodeFS = append(s.NodeFS, NodeFS{Node: node.Name, Kind: kind, Used: fs.UsedBytes, Capacity: fs.CapacityBytes})
+			}
 		}
 		for _, p := range sum.Pods {
 			for _, v := range p.Volume {

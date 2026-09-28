@@ -92,7 +92,7 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 
 	c.try(s, "helm releases", func() error { return c.helmReleases(ctx, s) })
 	tick()
-	c.try(s, "kubelet stats", func() error { return c.volumeStats(ctx, s) })
+	c.try(s, "kubelet stats", func() error { return c.kubeletStats(ctx, s) })
 	tick()
 	c.try(s, "deprecated apis", func() error { return c.deprecatedAPIs(ctx, s) })
 	tick()
