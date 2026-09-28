@@ -177,8 +177,9 @@ func uptime(s *collect.Snapshot, nodes []string) string {
 }
 
 // nodeDrift flags nodes whose kernel, OS, kubelet or runtime differs from
-// the majority. A long uptime on the odd node means it has been skipping
-// reboots, which raises the severity. Skipped on single-node clusters.
+// the majority. Kernel drift is rated by the size of the gap; a long uptime
+// on the odd node means it has been skipping reboots and bumps the
+// severity one level. Skipped on single-node clusters.
 type nodeDrift struct{}
 
 func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
@@ -216,11 +217,14 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			}
 			what := f.label + " " + v + " differs from " + plural(majorityN, "node") + " on " + majority
 			sev := Low
+			if f.label == "kernel" {
+				sev = kernelGapSeverity(v, majority)
+			}
 			if t, ok := s.NodeStart[n.Name]; ok {
 				up := s.ScannedAt.Sub(t)
 				what += ", up " + humanDuration(up)
 				if up > 30*24*time.Hour {
-					sev = Medium
+					sev = bump(sev)
 				}
 			}
 			out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: sev,
@@ -228,6 +232,35 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 	}
 	return out
+}
+
+// kernelGapSeverity: a different major.minor series is a different LTS
+// branch (high); within a series, patch releases land about weekly, so
+// more than 20 behind is months of missed fixes (medium).
+func kernelGapSeverity(have, want string) Severity {
+	a, okA := data.ParseVersion(have)
+	b, okB := data.ParseVersion(want)
+	switch {
+	case !okA || !okB:
+		return Low
+	case a.Major != b.Major || a.Minor != b.Minor:
+		return High
+	case b.Patch-a.Patch > 20:
+		return Medium
+	}
+	return Low
+}
+
+func bump(s Severity) Severity {
+	switch s {
+	case Low:
+		return Medium
+	case Medium:
+		return High
+	case High:
+		return Critical
+	}
+	return s
 }
 
 type nodeNotReady struct{}
