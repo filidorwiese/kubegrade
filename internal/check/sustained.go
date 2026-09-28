@@ -3,6 +3,7 @@ package check
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -375,4 +376,33 @@ func (pvcUsage) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			Fix: "expand the volume or prune data"})
 	}
 	return out
+}
+
+type pvcUnused struct{}
+
+// pvcUnused lists bound claims no pod mounts. Scaled-down StatefulSets
+// leave these on purpose, so it is informational only.
+func (pvcUnused) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	mounted := map[string]bool{}
+	for _, p := range s.Pods {
+		for _, v := range p.Spec.Volumes {
+			if v.PersistentVolumeClaim != nil {
+				mounted[p.Namespace+"/"+v.PersistentVolumeClaim.ClaimName] = true
+			}
+		}
+	}
+	var unused []string
+	for _, c := range s.PVCs {
+		key := c.Namespace + "/" + c.Name
+		if c.Status.Phase == corev1.ClaimBound && !mounted[key] {
+			unused = append(unused, key)
+		}
+	}
+	if len(unused) == 0 {
+		return nil
+	}
+	sort.Strings(unused)
+	return []Finding{{ID: "pvc-unused", Category: Hygiene, Severity: Info,
+		Resource: "pvcs", What: plural(len(unused), "bound claim") + " not mounted: " + strings.Join(unused, ", "),
+		Fix: "delete if the data is no longer needed"}}
 }

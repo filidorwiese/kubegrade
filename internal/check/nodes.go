@@ -346,3 +346,16 @@ func (nodeDisk) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	}
 	return out
 }
+
+type nodeCordoned struct{}
+
+func (nodeCordoned) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	var out []Finding
+	for _, n := range s.Nodes {
+		if n.Spec.Unschedulable {
+			out = append(out, Finding{ID: "node-cordoned", Category: Hygiene, Severity: Low,
+				Resource: "node " + n.Name, What: "cordoned", Fix: "uncordon after maintenance or remove the node"})
+		}
+	}
+	return out
+}
