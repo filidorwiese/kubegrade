@@ -273,7 +273,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 			}
 		}
 	} else {
-		fmt.Fprintln(w, paint(dim, "  no findings"))
+		fmt.Fprintln(w, "  🙌 nothing to fix")
 	}
 	if hidden > 0 {
 		fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hidden)))
