@@ -5,9 +5,15 @@ run, nothing about the cluster leaves your machine. Version data comes from
 endoflife.date and Artifact Hub.
 
 ```sh
-go run ./cmd/kubegrade            # current context
-go run ./cmd/kubegrade -v         # include info findings
-go run ./cmd/kubegrade --format json
+curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o kubegrade && chmod +x kubegrade
+```
+
+Or `go install github.com/filidorwiese/kubegrade/cmd/kubegrade@latest`.
+
+```sh
+kubegrade                 # current context
+kubegrade -v              # include info findings
+kubegrade --format json
 ```
 
 Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color`.
@@ -40,6 +46,6 @@ A+ 95, A 85, B 70, C 55, D 40, else F.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift.
 - **Health**: crash loops, frequent restarts, pending pods, unavailable deployments, failed releases, NotReady nodes, full volumes.
 
-Charts are resolved on Artifact Hub by name; `internal/data/charts.yaml`
-overrides the repo for private or ambiguous charts. `task refresh-data`
-re-vendors the Pluto deprecation table (Apache-2.0).
+Charts are resolved on Artifact Hub by name; when several share a name the
+release's home and source URLs pick the right one, otherwise the finding says
+it was guessed.
