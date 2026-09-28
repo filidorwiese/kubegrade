@@ -75,6 +75,9 @@ func run(o options, log *slog.Logger) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "cluster: %s (%s)\n", o.clusterName, cfg.Host)
+	if v := newerRelease(ctx); v != "" {
+		fmt.Fprintf(os.Stderr, "update available: %s (running %s), https://github.com/filidorwiese/kubegrade/releases/latest\n", v, version)
+	}
 	bar, tick := progress.New()
 	defer bar.Done()
 
