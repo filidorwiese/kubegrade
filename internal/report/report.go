@@ -206,10 +206,10 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 		if fixW == 0 {
 			headers, widths = headers[:4], widths[:4]
 		}
-		cells := func(f Finding) []string {
-			c := []string{f.Category, f.Severity, clip(f.Resource, resW), clip(f.What, whatW)}
+		cells := func(f Finding) [][]string {
+			c := [][]string{{f.Category}, {f.Severity}, wrap(f.Resource, resW), wrap(f.What, whatW)}
 			if fixW > 0 {
-				c = append(c, clip(f.Fix, fixW))
+				c = append(c, wrap(f.Fix, fixW))
 			} else if f.Fix != "" {
 				fixes = append(fixes, f)
 			}
@@ -222,18 +222,36 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 			}
 			return paint(dim, l+strings.Join(parts, m)+r)
 		}
-		row := func(c []string, style func(i int, s string) string) string {
-			var b strings.Builder
-			b.WriteString(paint(dim, "│"))
-			for i, s := range c {
-				pad := widths[i] - utf8.RuneCountInString(s)
-				b.WriteString(" " + style(i, s) + strings.Repeat(" ", pad) + " " + paint(dim, "│"))
+		// row renders one table row; cells may span several lines.
+		row := func(c [][]string, style func(i int, s string) string) string {
+			height := 0
+			for _, lines := range c {
+				height = max(height, len(lines))
 			}
-			return b.String()
+			var b strings.Builder
+			for ln := 0; ln < height; ln++ {
+				b.WriteString(paint(dim, "│"))
+				for i, lines := range c {
+					s := ""
+					if ln < len(lines) {
+						s = lines[ln]
+					}
+					pad := widths[i] - utf8.RuneCountInString(s)
+					b.WriteString(" " + style(i, s) + strings.Repeat(" ", pad) + " " + paint(dim, "│"))
+				}
+				b.WriteString("\n")
+			}
+			return strings.TrimRight(b.String(), "\n")
 		}
-		plain := func(_ int, s string) string { return s }
+		single := func(cells []string) [][]string {
+			out := make([][]string, len(cells))
+			for i, c := range cells {
+				out[i] = []string{c}
+			}
+			return out
+		}
 		fmt.Fprintln(w, rule("┌", "┬", "┐"))
-		fmt.Fprintln(w, row(headers, func(_ int, s string) string { return paint(bold, s) }))
+		fmt.Fprintln(w, row(single(headers), func(_ int, s string) string { return paint(bold, s) }))
 		fmt.Fprintln(w, rule("├", "┼", "┤"))
 		for i, f := range rows {
 			if i > 0 {
@@ -244,7 +262,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 				if i == 1 {
 					return paint(severityStyle[sev], s)
 				}
-				return plain(i, s)
+				return s
 			}))
 		}
 		fmt.Fprintln(w, rule("└", "┴", "┘"))
@@ -299,7 +317,8 @@ func summarise(fs []Finding, category string) string {
 
 // columnWidths fits resource, what and fix into width. The box costs
 // 16 columns of borders and padding plus the two 8-wide fixed columns.
-// what and resource give way first; fix is dropped when there's no room.
+// Resource and fix get modest caps; the finding column takes the rest.
+// Fix is dropped below the table when there is no room for it.
 func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	for _, f := range fs {
 		resW = max(resW, utf8.RuneCountInString(f.Resource))
@@ -311,24 +330,47 @@ func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	}
 	const fixed = 16 + 8 + 8
 	avail := width - fixed
-	for _, step := range []struct{ res, what int }{{40, 70}, {40, 50}, {30, 40}, {24, 32}} {
-		resW, whatW = min(resW, step.res), min(whatW, step.what)
-		if left := avail - resW - whatW; left >= 24 {
-			return resW, whatW, min(fixW, left)
-		}
+	resW = min(resW, 32)
+	fixW = min(fixW, 28)
+	if rest := avail - resW - fixW; rest >= 30 {
+		return resW, min(whatW, rest), fixW
 	}
-	return resW, whatW, 0
+	resW = min(resW, 24)
+	return resW, max(min(whatW, avail-resW), 16), 0
 }
 
-func clip(s string, n int) string {
-	if n <= 0 {
-		return ""
+// wrap breaks s into lines of at most n runes on spaces; a single word
+// longer than n is cut. n <= 0 means no wrapping.
+func wrap(s string, n int) []string {
+	if n <= 0 || utf8.RuneCountInString(s) <= n {
+		return []string{s}
 	}
-	if utf8.RuneCountInString(s) <= n {
-		return s
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(s) {
+		for utf8.RuneCountInString(word) > n {
+			if line != "" {
+				lines = append(lines, line)
+				line = ""
+			}
+			r := []rune(word)
+			lines = append(lines, string(r[:n]))
+			word = string(r[n:])
+		}
+		switch {
+		case line == "":
+			line = word
+		case utf8.RuneCountInString(line)+1+utf8.RuneCountInString(word) <= n:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
 	}
-	r := []rune(s)
-	return string(r[:n-1]) + "…"
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 func gradeStyle(letter string) string {
