@@ -22,27 +22,7 @@ kubegrade --format json
 Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color`.
 Needs cluster-wide read access, including Helm release secrets.
 
-```
-  █████     Versions  A   1 medium, 1 low
-  ██  ██    Hygiene   B   2 medium, 1 low
-  █████     Health    A   1 medium
-  ██  ██
-  █████     capped by Hygiene
-
-┌──────────┬──────────┬────────────────────────┬──────────────────────────────────────┬─────────────────────────────┐
-│ Category │ Severity │ Resource               │ Finding                              │ Fix                         │
-├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
-│ versions │ medium   │ helm traefik/traefik   │ major 41.6.0 available, have 40.3.0  │ major upgrade to 41.6.0     │
-├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
-│ hygiene  │ medium   │ deploy shop/checkout   │ image checkout-api:latest            │ pin a version tag           │
-├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
-│ health   │ medium   │ deploy shop/plausible  │ CrashLoopBackOff 1/1 pods (exit 1)   │ check pod logs              │
-└──────────┴──────────┴────────────────────────┴──────────────────────────────────────┴─────────────────────────────┘
-  3 info hidden, -v to show
-
-External links
-  helm traefik/traefik: https://github.com/traefik/traefik-helm-chart
-```
+![example report](kubegrade-example-report.png)
 
 Each category starts at 100 and loses low 3, medium 8, high 15, critical 30
 per finding. A+ 95, A 85, B 70, C 55, D 40, else F. The overall grade is the
