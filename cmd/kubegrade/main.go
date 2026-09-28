@@ -1,6 +1,6 @@
 // Command kubegrade scans the cluster in your kubeconfig once and prints
-// findings plus a letter grade to stdout. Nothing leaves your machine unless
-// --online is set, which fetches public EOL tables and Helm repo indexes.
+// findings plus a letter grade to stdout. It fetches public EOL tables from
+// endoflife.date and Helm repo indexes; nothing about the cluster is sent.
 package main
 
 import (
@@ -30,7 +30,6 @@ type options struct {
 	kubeconfig  string
 	format      string
 	clusterName string
-	online      bool
 }
 
 func main() {
@@ -38,7 +37,6 @@ func main() {
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; defaults to $KUBECONFIG or ~/.kube/config")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
-	flag.BoolVar(&o.online, "online", false, "fetch EOL tables from endoflife.date and Helm repo indexes each scan")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -70,11 +68,11 @@ func run(o options, log *slog.Logger) error {
 		o.clusterName = ctxName
 	}
 
-	tables, err := data.Embedded()
+	tables, err := data.Load(ctx)
 	if err != nil {
-		return fmt.Errorf("embedded data: %w", err)
+		return fmt.Errorf("load EOL tables: %w", err)
 	}
-	collector, err := collect.New(cfg, tables, o.online, log)
+	collector, err := collect.New(cfg, tables, log)
 	if err != nil {
 		return err
 	}
@@ -83,13 +81,6 @@ func run(o options, log *slog.Logger) error {
 
 func scan(ctx context.Context, o options, c *collect.Collector) error {
 	start := time.Now()
-	if o.online {
-		t, err := data.Online(ctx)
-		if err != nil {
-			return fmt.Errorf("online tables: %w", err)
-		}
-		c.SetTables(t)
-	}
 	snap, err := c.Collect(ctx)
 	if err != nil {
 		return err
@@ -100,7 +91,6 @@ func scan(ctx context.Context, o options, c *collect.Collector) error {
 	r := report.Build(report.Input{
 		Agent: version, Cluster: o.clusterName, ScannedAt: snap.ScannedAt, Duration: time.Since(start),
 		Findings: findings, Result: result, Errors: snap.Errors,
-		DataGenerated: snap.Tables.Generated(), DataSource: snap.Tables.Source,
 	})
 	if o.format == "json" {
 		return report.WriteJSON(os.Stdout, r)

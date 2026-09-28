@@ -16,18 +16,16 @@ import (
 )
 
 type Report struct {
-	Agent         string     `json:"agent"`
-	Cluster       string     `json:"cluster"`
-	ScannedAt     time.Time  `json:"scanned_at"`
-	Duration      float64    `json:"duration_seconds"`
-	Grade         string     `json:"grade"`
-	Score         int        `json:"score"`
-	CappedBy      string     `json:"capped_by,omitempty"`
-	Categories    []Category `json:"categories"`
-	Findings      []Finding  `json:"findings"`
-	DataGenerated string     `json:"data_generated"`
-	DataSource    string     `json:"data_source"`
-	Errors        []string   `json:"errors,omitempty"`
+	Agent      string     `json:"agent"`
+	Cluster    string     `json:"cluster"`
+	ScannedAt  time.Time  `json:"scanned_at"`
+	Duration   float64    `json:"duration_seconds"`
+	Grade      string     `json:"grade"`
+	Score      int        `json:"score"`
+	CappedBy   string     `json:"capped_by,omitempty"`
+	Categories []Category `json:"categories"`
+	Findings   []Finding  `json:"findings"`
+	Errors     []string   `json:"errors,omitempty"`
 }
 
 type Category struct {
@@ -49,20 +47,19 @@ type Finding struct {
 }
 
 type Input struct {
-	Agent, Cluster, DataGenerated, DataSource string
-	ScannedAt                                 time.Time
-	Duration                                  time.Duration
-	Findings                                  []check.Finding
-	Result                                    grade.Result
-	Errors                                    []string
+	Agent, Cluster string
+	ScannedAt      time.Time
+	Duration       time.Duration
+	Findings       []check.Finding
+	Result         grade.Result
+	Errors         []string
 }
 
 func Build(in Input) Report {
 	r := Report{
 		Agent: in.Agent, Cluster: in.Cluster, ScannedAt: in.ScannedAt.UTC(),
 		Duration: in.Duration.Seconds(), Grade: in.Result.Grade, Score: in.Result.Score,
-		CappedBy: in.Result.CappedBy, DataGenerated: in.DataGenerated, DataSource: in.DataSource,
-		Errors: in.Errors,
+		CappedBy: in.Result.CappedBy, Errors: in.Errors,
 	}
 	for _, c := range in.Result.Categories {
 		r.Categories = append(r.Categories, Category{ID: c.ID, Grade: c.Grade, Score: c.Score, Summary: c.Summary})

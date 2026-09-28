@@ -24,8 +24,7 @@ type Snapshot struct {
 	HelmReleases []HelmRelease
 	VolumeStats  []VolumeStat
 	Deprecated   []DeprecatedUse
-	// ChartLatest is chart name -> newest stable upstream; nil when not
-	// running --online.
+	// ChartLatest is chart name -> newest stable upstream version.
 	ChartLatest map[string]ChartUpstream
 
 	// Tables are the EOL tables used for this scan.

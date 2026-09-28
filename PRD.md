@@ -8,7 +8,7 @@ Free, open-source CLI. Single Go binary that scans a cluster through kubeconfig 
 |-------|----------|
 | Module | `github.com/filidorwiese/kubegrade` |
 | Toolchain | Go 1.26 (pulled in by client-go v0.37); static binary via `task build` |
-| Dev loop | `task run -- --online` against the current kubeconfig context |
+| Dev loop | `task run` against the current kubeconfig context |
 | CI | none yet |
 | Tests | none (prototype) |
 | Build order | all 9 steps in one batch |
@@ -16,10 +16,10 @@ Free, open-source CLI. Single Go binary that scans a cluster through kubeconfig 
 | Image checks | Deployments only; skip k3s bundled kube-system workloads |
 | Deprecated APIs | Pluto `versions.yaml` vendored; k8s rows only; objects count only when managedFields or last-applied show the deprecated version |
 | Cluster name | `--cluster-name`, fallback kubeconfig context or `in-cluster` |
-| `--online` | default **off**. When on: kubernetes, kernel, OS tables fetched from endoflife.date at startup. Fetch failure exits with an error. Off uses embedded yaml |
+| Online | always. Kubernetes, kernel, OS tables fetched from endoflife.date at startup; fetch failure exits with an error. `--online` flag and embedded EOL yaml removed 2026-09-28. Pluto table and chart mapping stay embedded |
 | Run mode | single scan per invocation; `--interval`/`--once` and the in-memory first-seen store removed 2026-09-28 |
 | Certificates | category removed 2026-09-28 (API server cert, TLS secrets, cert-manager) |
-| Chart upstream | `--online` only: `internal/data/charts.yaml` maps chart name to repo, fetch `index.yaml`, semver compare. Medium if major behind (fix points at the chart sources URL for the changelog), low per minor (max 3), info for patch. Unmapped chart is info. Repo fetch failure is a collector error, not a scan abort |
+| Chart upstream | `internal/data/charts.yaml` maps chart name to repo, fetch `index.yaml`, semver compare. Medium if major behind (fix points at the chart sources URL for the changelog), low per minor (max 3), info for patch. Unmapped chart is info. Repo fetch failure is a collector error, not a scan abort |
 | Image tag lookups | not built |
 
 ## Grading
@@ -32,7 +32,7 @@ Letters: A+ 95-100, A 85-94, B 70-84, C 55-69, D 40-54, F 0-39.
 
 See handover doc (checks table per category). Check IDs are stable:
 
-- control-plane: `k8s-version-eol`, `k8s-version-behind`, `k8s-data-stale`, `k8s-api-deprecated`
+- control-plane: `k8s-version-eol`, `k8s-version-behind`, `k8s-api-deprecated`
 - workloads: `helm-status`, `helm-revisions`, `chart-outdated`, `chart-unmapped`, `image-tag-latest`, `image-no-digest`
 - nodes: `kubelet-skew`, `kernel-eol`, `os-eol`, `node-drift`, `node-info`, `node-notready`
 - sustained: `pod-crashloop` (severity by restart count), `pod-pending`, `deploy-unavailable`, `pvc-usage` (medium at 90%, high at 95%)
@@ -45,8 +45,8 @@ internal/collect/    snapshot builders (nodes, pods, deployments, helm, pvc, kub
 internal/check/      one file per category
 internal/grade/      scoring, letters, cap
 internal/report/     text + json
-internal/data/       embedded yaml + loader + online fetch + semver
-hack/refresh-data.sh
+internal/data/       embedded Pluto table + chart mapping, endoflife.date fetch, semver
+hack/refresh-data.sh re-vendors Pluto
 Taskfile.yaml
 ```
 

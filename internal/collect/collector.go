@@ -19,11 +19,10 @@ type Collector struct {
 	dyn    dynamic.Interface
 	cfg    *rest.Config
 	tables *data.Tables
-	online bool
 	log    *slog.Logger
 }
 
-func New(cfg *rest.Config, tables *data.Tables, online bool, log *slog.Logger) (*Collector, error) {
+func New(cfg *rest.Config, tables *data.Tables, log *slog.Logger) (*Collector, error) {
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -32,10 +31,8 @@ func New(cfg *rest.Config, tables *data.Tables, online bool, log *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
-	return &Collector{cs: cs, dyn: dyn, cfg: cfg, tables: tables, online: online, log: log}, nil
+	return &Collector{cs: cs, dyn: dyn, cfg: cfg, tables: tables, log: log}, nil
 }
-
-func (c *Collector) SetTables(t *data.Tables) { c.tables = t }
 
 // Collect builds the snapshot. Core list calls are fatal; everything else
 // records an error and moves on so one broken collector never hides a report.

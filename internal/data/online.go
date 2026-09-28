@@ -40,29 +40,27 @@ func (c cycle) isLTS() bool {
 	return json.Unmarshal(c.LTS, &s) == nil && s != ""
 }
 
-// Online fetches the EOL tables from endoflife.date. Deprecations always
-// come from the embedded Pluto table. Any fetch error fails the whole call.
-func Online(ctx context.Context) (*Tables, error) {
-	emb, err := Embedded()
+// Load fetches the EOL tables from endoflife.date on top of the embedded
+// static ones. Any fetch error fails the whole call.
+func Load(ctx context.Context) (*Tables, error) {
+	t, err := embedded()
 	if err != nil {
 		return nil, err
 	}
-	today := time.Now().UTC().Format(DateLayout)
-	t := &Tables{Deprecations: emb.Deprecations, Charts: emb.Charts, Source: "endoflife.date"}
 
 	k8s, err := fetch(ctx, "kubernetes")
 	if err != nil {
 		return nil, err
 	}
-	t.Kubernetes = buildKubernetes(k8s, today)
+	t.Kubernetes = buildKubernetes(k8s)
 
 	linux, err := fetch(ctx, "linux")
 	if err != nil {
 		return nil, err
 	}
-	t.Kernel = buildKernel(linux, today)
+	t.Kernel = buildKernel(linux)
 
-	t.OS = OS{Generated: today}
+	t.OS = OS{}
 	for _, p := range osProducts {
 		cycles, err := fetch(ctx, p.product)
 		if err != nil {
@@ -100,8 +98,8 @@ func fetch(ctx context.Context, product string) ([]cycle, error) {
 	return cycles, nil
 }
 
-func buildKubernetes(cycles []cycle, today string) Kubernetes {
-	k := Kubernetes{Generated: today}
+func buildKubernetes(cycles []cycle) Kubernetes {
+	var k Kubernetes
 	for _, c := range cycles {
 		if !strings.HasPrefix(c.Cycle, "1.") {
 			continue
@@ -119,8 +117,8 @@ func buildKubernetes(cycles []cycle, today string) Kubernetes {
 	return k
 }
 
-func buildKernel(cycles []cycle, today string) Kernel {
-	k := Kernel{Generated: today}
+func buildKernel(cycles []cycle) Kernel {
+	var k Kernel
 	for _, c := range cycles {
 		if c.isLTS() && c.eolDate() != "" {
 			k.Kernels = append(k.Kernels, KernelVersion{Version: c.Cycle, EOL: c.eolDate()})

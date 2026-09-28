@@ -60,28 +60,6 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	return out
 }
 
-type k8sDataStale struct{}
-
-func (k8sDataStale) ID() string       { return "k8s-data-stale" }
-func (k8sDataStale) Category() string { return ControlPlane }
-
-func (k8sDataStale) Run(_ context.Context, s *collect.Snapshot) []Finding {
-	gen := s.Tables.Generated()
-	f := Finding{ID: "k8s-data-stale", Category: ControlPlane, Severity: Info, Resource: "data tables"}
-	t, ok := data.ParseDate(gen)
-	if !ok {
-		f.What = "generated date unreadable"
-		return []Finding{f}
-	}
-	age := days(s.ScannedAt.Sub(t))
-	f.What = "generated " + gen + " (" + fmtInt(age) + " days old, " + s.Tables.Source + ")"
-	if age > 90 {
-		f.Severity = Low
-		f.Fix = "run hack/refresh-data.sh or use --online"
-	}
-	return []Finding{f}
-}
-
 type k8sDeprecated struct{}
 
 func (k8sDeprecated) ID() string       { return "k8s-api-deprecated" }

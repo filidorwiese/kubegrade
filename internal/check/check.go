@@ -57,7 +57,7 @@ type Check interface {
 // All returns every check in report order.
 func All() []Check {
 	return []Check{
-		k8sVersion{}, k8sDataStale{}, k8sDeprecated{},
+		k8sVersion{}, k8sDeprecated{},
 		helmStatus{}, chartOutdated{}, imageTags{},
 		kubeletSkew{}, kernelEOL{}, osEOL{}, nodeDrift{}, nodeInfo{}, nodeNotReady{},
 		crashLoop{}, podPending{}, deployUnavailable{}, pvcUsage{},

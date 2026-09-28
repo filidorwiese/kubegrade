@@ -1,5 +1,5 @@
 # Hand-maintained: Helm releases do not record their source repo.
-# Chart name -> repo URL. Unmapped charts get an info finding in --online mode.
+# Chart name -> repo URL. Unmapped charts get an info finding.
 generated: 2026-09-28
 charts:
   - name: traefik

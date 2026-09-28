@@ -1,5 +1,6 @@
-// Package data holds the static EOL tables, embedded at build time and
-// optionally refreshed from endoflife.date when --online is set.
+// Package data holds the lookup tables. EOL data is always fetched from
+// endoflife.date at startup; only the Pluto deprecation table and the chart
+// repo mapping are embedded because they have no live source.
 package data
 
 import (
@@ -11,45 +12,42 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-//go:embed kubernetes.yaml kernel.yaml os.yaml k8s-deprecations.yaml charts.yaml
+//go:embed k8s-deprecations.yaml charts.yaml
 var files embed.FS
 
 const DateLayout = "2006-01-02"
 
 type Kubernetes struct {
-	Generated string       `json:"generated"`
-	Latest    string       `json:"latest"`
-	Versions  []K8sVersion `json:"versions"`
+	Latest   string
+	Versions []K8sVersion
 }
 
 type K8sVersion struct {
-	Minor    string `json:"minor"`
-	Released string `json:"released"`
-	EOL      string `json:"eol"`
+	Minor    string
+	Released string
+	EOL      string
 }
 
 type Kernel struct {
-	Generated string          `json:"generated"`
-	Kernels   []KernelVersion `json:"kernels"`
+	Kernels []KernelVersion
 }
 
 type KernelVersion struct {
-	Version string `json:"version"`
-	EOL     string `json:"eol"`
+	Version string
+	EOL     string
 }
 
 type OS struct {
-	Generated string   `json:"generated"`
-	Distros   []Distro `json:"distros"`
+	Distros []Distro
 }
 
 // Distro is matched by substring against node osImage; longest match wins.
 // Empty EOL means rolling release, never flagged.
 type Distro struct {
-	Match   string `json:"match"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	EOL     string `json:"eol,omitempty"`
+	Match   string
+	Name    string
+	Version string
+	EOL     string
 }
 
 type Deprecations struct {
@@ -92,16 +90,12 @@ type Tables struct {
 	OS           OS
 	Deprecations Deprecations
 	Charts       Charts
-	// Source is "embedded" or "endoflife.date", shown in the report.
-	Source string
 }
 
-func Embedded() (*Tables, error) {
-	t := &Tables{Source: "embedded"}
+// embedded loads the static tables; Load adds the live EOL data.
+func embedded() (*Tables, error) {
+	t := &Tables{}
 	for name, dst := range map[string]any{
-		"kubernetes.yaml":       &t.Kubernetes,
-		"kernel.yaml":           &t.Kernel,
-		"os.yaml":               &t.OS,
 		"k8s-deprecations.yaml": &t.Deprecations,
 		"charts.yaml":           &t.Charts,
 	} {
@@ -114,17 +108,6 @@ func Embedded() (*Tables, error) {
 		}
 	}
 	return t, nil
-}
-
-// Generated returns the oldest generated date across the EOL tables.
-func (t *Tables) Generated() string {
-	oldest := t.Kubernetes.Generated
-	for _, g := range []string{t.Kernel.Generated, t.OS.Generated} {
-		if g < oldest {
-			oldest = g
-		}
-	}
-	return oldest
 }
 
 func ParseDate(s string) (time.Time, bool) {

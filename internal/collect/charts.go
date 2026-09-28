@@ -22,11 +22,8 @@ type repoIndex struct {
 }
 
 // chartUpstream fetches index.yaml once per repo that a running release
-// maps to and records the newest stable chart version. Only in --online.
+// maps to and records the newest stable chart version.
 func (c *Collector) chartUpstream(ctx context.Context, s *Snapshot) error {
-	if !c.online {
-		return nil
-	}
 	s.ChartLatest = map[string]ChartUpstream{}
 	indexes := map[string]*repoIndex{}
 	for _, r := range s.HelmReleases {

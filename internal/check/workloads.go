@@ -116,11 +116,7 @@ type chartOutdated struct{}
 func (chartOutdated) ID() string       { return "chart-outdated" }
 func (chartOutdated) Category() string { return Workloads }
 
-// chartOutdated only fires in --online mode, when ChartLatest is populated.
 func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
-	if s.ChartLatest == nil {
-		return nil
-	}
 	var out []Finding
 	for _, r := range s.HelmReleases {
 		res := "helm " + r.Namespace + "/" + r.Name
