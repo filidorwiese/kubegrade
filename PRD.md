@@ -35,7 +35,7 @@ See handover doc (checks table per category). Check IDs are stable:
 
 - control-plane: `k8s-version-eol`, `k8s-version-behind`, `k8s-data-stale`, `k8s-api-deprecated`
 - workloads: `helm-status`, `helm-revisions`, `chart-outdated`, `chart-unmapped`, `image-tag-latest`, `image-no-digest`
-- nodes: `kubelet-skew`, `kernel-eol`, `os-eol`, `runtime-version`, `node-notready`
+- nodes: `kubelet-skew`, `kernel-eol`, `os-eol`, `node-info`, `node-notready`
 - certificates: `apiserver-cert-expiry`, `tls-secret-expiry`, `certmanager-not-ready`, `certmanager-issuing-failed`
 - sustained: `pod-crashloop`, `pod-pending`, `deploy-unavailable`, `pvc-usage`
 

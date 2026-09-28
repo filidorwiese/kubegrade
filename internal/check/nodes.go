@@ -49,9 +49,7 @@ func (kernelEOL) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []F
 		f := Finding{ID: "kernel-eol", Category: Nodes, Resource: "node " + n.Name}
 		k, ok := s.Tables.Kernel.Find(minor(kv))
 		if !ok {
-			f.Severity, f.What = Info, "kernel "+kv+" is not an LTS kernel"
-			out = append(out, f)
-			continue
+			continue // non-LTS: reported on the node-info line
 		}
 		eol, ok := data.ParseDate(k.EOL)
 		if !ok {
@@ -84,9 +82,7 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Findi
 		f := Finding{ID: "os-eol", Category: Nodes, Resource: "node " + n.Name}
 		d, ok := s.Tables.OS.Match(img)
 		if !ok {
-			f.Severity, f.What = Info, "unknown OS: "+img
-			out = append(out, f)
-			continue
+			continue // unknown OS: reported on the node-info line
 		}
 		eol, ok := data.ParseDate(d.EOL)
 		if !ok || eol.After(s.ScannedAt) {
@@ -98,16 +94,29 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Findi
 	return out
 }
 
-type runtimeVersion struct{}
+// nodeInfo is one info line per node with OS, kernel and runtime, so the
+// report always shows what the node runs even when nothing is wrong.
+type nodeInfo struct{}
 
-func (runtimeVersion) ID() string       { return "runtime-version" }
-func (runtimeVersion) Category() string { return Nodes }
+func (nodeInfo) ID() string       { return "node-info" }
+func (nodeInfo) Category() string { return Nodes }
 
-func (runtimeVersion) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (nodeInfo) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
-		out = append(out, Finding{ID: "runtime-version", Category: Nodes, Severity: Info,
-			Resource: "node " + n.Name, What: "runtime " + n.Status.NodeInfo.ContainerRuntimeVersion})
+		ni := n.Status.NodeInfo
+		os := ni.OSImage
+		if _, ok := s.Tables.OS.Match(os); !ok {
+			os += " (not in OS table)"
+		}
+		kernel := "kernel " + ni.KernelVersion
+		if k, ok := s.Tables.Kernel.Find(minor(ni.KernelVersion)); ok {
+			kernel += " LTS until " + k.EOL
+		} else {
+			kernel += " not LTS"
+		}
+		out = append(out, Finding{ID: "node-info", Category: Nodes, Severity: Info,
+			Resource: "node " + n.Name, What: os + ", " + kernel + ", " + ni.ContainerRuntimeVersion})
 	}
 	return out
 }
