@@ -132,16 +132,15 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, what := range order {
 		g := groups[what]
+		if len(g.nodes) < majority {
+			continue // odd ones out are reported by node-drift, not twice
+		}
 		res := "node " + g.nodes[0]
 		if len(g.nodes) > 1 {
 			res = fmtInt(len(g.nodes)) + " nodes"
 		}
 		if up := uptime(s, g.nodes); up != "" {
 			what += ", up " + up
-		}
-		// Odd ones out say so first, before clipping can hide the difference.
-		if len(groups) > 1 && len(g.nodes) < majority {
-			what = "differs from " + plural(majority, "node") + ": " + what
 		}
 		out = append(out, Finding{ID: "node-info", Category: Versions, Severity: Info, Resource: res, What: what})
 	}
@@ -178,7 +177,8 @@ func uptime(s *collect.Snapshot, nodes []string) string {
 }
 
 // nodeDrift flags nodes whose kernel, OS, kubelet or runtime differs from
-// the majority. Skipped on single-node clusters.
+// the majority. A long uptime on the odd node means it has been skipping
+// reboots, which raises the severity. Skipped on single-node clusters.
 type nodeDrift struct{}
 
 func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
@@ -214,10 +214,17 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			if v == majority {
 				continue
 			}
-			out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: Low,
-				Resource: "node " + n.Name,
-				What:     f.label + " " + v + " differs from " + plural(majorityN, "node") + " on " + majority,
-				Fix:      "pending reboot or upgrade"})
+			what := f.label + " " + v + " differs from " + plural(majorityN, "node") + " on " + majority
+			sev := Low
+			if t, ok := s.NodeStart[n.Name]; ok {
+				up := s.ScannedAt.Sub(t)
+				what += ", up " + humanDuration(up)
+				if up > 30*24*time.Hour {
+					sev = Medium
+				}
+			}
+			out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: sev,
+				Resource: "node " + n.Name, What: what, Fix: "pending reboot or upgrade"})
 		}
 	}
 	return out
