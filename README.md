@@ -1,8 +1,11 @@
 # kubegrade
 
-Grades a Kubernetes cluster from your kubeconfig. Read-only, one scan per
-run, nothing about the cluster leaves your machine. Version data comes from
-endoflife.date and Artifact Hub.
+Grades the upkeep of your Kubernetes cluster from A+ to F.
+
+It scans read-only from your kubeconfig for outdated versions, sloppy config
+and unhealthy workloads, and suggests a fix for each finding. Nothing about
+the cluster leaves your machine; version data comes from endoflife.date and
+Artifact Hub.
 
 ```sh
 curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o kubegrade && chmod +x kubegrade
