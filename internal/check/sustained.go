@@ -166,6 +166,11 @@ func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			}
 		}
 		reason := g.reasons.top()
+		// "Unknown" means the node went away (reboot, kured), not the app.
+		// Restarts older than a week are history, not a current problem.
+		if reason == "Unknown" || (!g.last.IsZero() && s.ScannedAt.Sub(g.last) > 7*24*time.Hour) {
+			continue
+		}
 		out = append(out, Finding{ID: "pod-restarts", Category: Health, Severity: sev, Resource: owner,
 			What: what + reason.suffix(), Fix: reason.fix("kubectl logs -p, check probes")})
 	}
@@ -259,8 +264,20 @@ func (deployUnavailable) ID() string       { return "deploy-unavailable" }
 func (deployUnavailable) Category() string { return Health }
 
 func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	// A crash-looping deployment is unavailable by definition; one finding.
+	looping := map[string]bool{}
+	for _, p := range s.Pods {
+		for _, cs := range p.Status.ContainerStatuses {
+			if cs.State.Waiting != nil && cs.State.Waiting.Reason == "CrashLoopBackOff" {
+				looping[ownerOf(p, s.ReplicaSets)] = true
+			}
+		}
+	}
 	var out []Finding
 	for _, d := range s.Deployments {
+		if looping["deploy "+d.Namespace+"/"+d.Name] {
+			continue
+		}
 		want := int32(1)
 		if d.Spec.Replicas != nil {
 			want = *d.Spec.Replicas

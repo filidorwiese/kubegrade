@@ -15,9 +15,13 @@ go run ./cmd/kubegrade --format json
 go run ./cmd/kubegrade --kubeconfig ~/.kube/other
 ```
 
-One scan per invocation. Flags: `--format text|json`, `--cluster-name`
-(defaults to the current context), `--kubeconfig`
-(defaults to `$KUBECONFIG` or `~/.kube/config`).
+One scan per invocation. Flags: `--format text|json`, `-v` (show info
+findings), `--no-color`, `--cluster-name` (defaults to the current context),
+`--kubeconfig` (defaults to `$KUBECONFIG` or `~/.kube/config`).
+
+Text output groups findings by category, severe first. Info findings are
+hidden unless `-v` is given; JSON always contains everything, including a
+`link` per finding where one exists.
 
 `task build` puts a static binary in `bin/kubegrade`.
 

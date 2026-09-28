@@ -17,6 +17,7 @@ Free, open-source CLI. Single Go binary that scans a cluster through kubeconfig 
 | Deprecated APIs | Pluto `versions.yaml` vendored; k8s rows only; objects count only when managedFields or last-applied show the deprecated version |
 | Cluster name | `--cluster-name`, fallback kubeconfig context or `in-cluster` |
 | Online | always. Kubernetes, kernel, OS tables fetched from endoflife.date at startup; fetch failure exits with an error. `--online` flag and embedded EOL yaml removed 2026-09-28. Pluto table and chart mapping stay embedded |
+| Text layout | grouped by category with score header, no category or points column; info hidden unless `-v`; links printed in a LINKS block; registry stripped from image names and build suffix from kernels in text only (JSON keeps full values) |
 | Colour | text output coloured by severity and score when stdout is a tty; `--no-color` or `NO_COLOR` disables. |
 | Progress | single-line bar on stderr, only when stderr is a tty; stdout stays clean for JSON |
 | Chart lookups | 8 concurrent workers; Artifact Hub HTTP 429 stops further lookups and is reported as a collector error, no cache yet |
@@ -37,7 +38,7 @@ Check IDs are stable:
 
 - versions: `k8s-version-eol`, `k8s-version-behind`, `kernel-eol`, `os-eol`, `kubelet-skew`, `chart-outdated`, `chart-unresolved`, `node-info`
 - hygiene: `k8s-api-deprecated`, `image-tag-latest`, `image-no-digest`, `helm-revisions`, `node-drift`
-- health: `helm-status`, `pod-crashloop` (severity by restart count), `pod-restarts` (5+ restarts per workload: low, medium if the last one was within 24h; both crash checks show the dominant last-termination reason such as OOMKilled), `pod-pending`, `deploy-unavailable`, `node-notready`, `pvc-usage` (medium at 90%, high at 95%)
+- health: `helm-status`, `pod-crashloop` (severity by restart count), `pod-restarts` (5+ restarts per workload: low, medium if the last one was within 24h; skipped when the last restart is over 7 days old or the reason is Unknown, i.e. node reboot; both crash checks show the dominant last-termination reason such as OOMKilled), `pod-pending`, `deploy-unavailable` (suppressed when the same deployment is crash-looping), `node-notready`, `pvc-usage` (medium at 90%, high at 95%)
 
 ## Layout
 

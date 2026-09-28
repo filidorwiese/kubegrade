@@ -41,6 +41,14 @@ type kernelEOL struct{}
 func (kernelEOL) ID() string       { return "kernel-eol" }
 func (kernelEOL) Category() string { return Versions }
 
+// shortKernel drops the distro build suffix: "6.12.63+deb13-amd64" -> "6.12.63".
+func shortKernel(v string) string {
+	if i := strings.IndexAny(v, "+"); i >= 0 {
+		return v[:i]
+	}
+	return v
+}
+
 func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
@@ -114,7 +122,7 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if _, ok := s.Tables.OS.Match(os); !ok {
 			os += " (not in OS table)"
 		}
-		kernel := "kernel " + ni.KernelVersion
+		kernel := "kernel " + shortKernel(ni.KernelVersion)
 		if k, ok := s.Tables.Kernel.Find(minor(ni.KernelVersion)); ok {
 			kernel += " LTS until " + k.EOL
 		} else {
@@ -156,7 +164,7 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		label string
 		get   func(corev1.NodeSystemInfo) string
 	}{
-		{"kernel", func(i corev1.NodeSystemInfo) string { return i.KernelVersion }},
+		{"kernel", func(i corev1.NodeSystemInfo) string { return shortKernel(i.KernelVersion) }},
 		{"OS", func(i corev1.NodeSystemInfo) string { return i.OSImage }},
 		{"kubelet", func(i corev1.NodeSystemInfo) string { return i.KubeletVersion }},
 		{"runtime", func(i corev1.NodeSystemInfo) string { return i.ContainerRuntimeVersion }},

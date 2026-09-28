@@ -41,6 +41,9 @@ type Finding struct {
 	Resource string
 	What     string
 	Fix      string
+	// Link is an optional URL with more detail, printed separately so the
+	// fix column stays short.
+	Link string
 	// Since is set when the finding describes a condition with a start time.
 	Since *time.Time
 	// Count multiplies the severity points; zero means one.

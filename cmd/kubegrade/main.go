@@ -33,6 +33,7 @@ type options struct {
 	format      string
 	clusterName string
 	noColor     bool
+	verbose     bool
 }
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
 	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
+	flag.BoolVar(&o.verbose, "v", false, "show info findings")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -100,7 +102,7 @@ func run(o options, log *slog.Logger) error {
 	if o.format == "json" {
 		return report.WriteJSON(os.Stdout, rep)
 	}
-	return report.WriteText(os.Stdout, rep, useColor(o), termWidth())
+	return report.WriteText(os.Stdout, rep, report.TextOptions{Color: useColor(o), Width: termWidth(), Verbose: o.verbose})
 }
 
 // termWidth is the stdout terminal width, or 0 when stdout is not a tty.

@@ -43,6 +43,7 @@ type Finding struct {
 	Resource string     `json:"resource"`
 	What     string     `json:"what"`
 	Fix      string     `json:"fix"`
+	Link     string     `json:"link,omitempty"`
 	Points   int        `json:"points"`
 	Since    *time.Time `json:"since"`
 }
@@ -68,7 +69,7 @@ func Build(in Input) Report {
 	for _, f := range in.Findings {
 		r.Findings = append(r.Findings, Finding{
 			ID: f.ID, Category: f.Category, Severity: string(f.Severity), Resource: f.Resource,
-			What: f.What, Fix: f.Fix, Points: grade.Points(f), Since: f.Since,
+			What: f.What, Fix: f.Fix, Link: f.Link, Points: grade.Points(f), Since: f.Since,
 		})
 	}
 	// Costliest first, then category order, then resource for stable output.
@@ -115,9 +116,90 @@ var severityStyle = map[string]string{
 	"info":     dim,
 }
 
+// TextOptions controls the terminal rendering. Width 0 means no clipping.
+type TextOptions struct {
+	Color   bool
+	Width   int
+	Verbose bool // show info findings
+}
+
+// WriteText renders the report grouped by category, severe first.
+func WriteText(w io.Writer, r Report, opt TextOptions) error {
+	paint := func(style, s string) string {
+		if !opt.Color || style == "" {
+			return s
+		}
+		return style + s + reset
+	}
+
+	fmt.Fprintf(w, "%s  scanned: %s  duration: %.1fs\n\n",
+		paint(bold, "kubegrade v"+r.Agent), r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
+	fmt.Fprintf(w, "GRADE  %s (%d)", paint(gradeStyle(r.Grade), fmt.Sprintf("%-3s", r.Grade)), r.Score)
+	if r.CappedBy != "" {
+		fmt.Fprintf(w, "   capped by: %s", check.CategoryNames[r.CappedBy])
+	}
+	fmt.Fprint(w, "\n")
+
+	var links []Finding
+	for _, c := range r.Categories {
+		fmt.Fprintf(w, "\n%s  %s\n", paint(bold, strings.ToUpper(check.CategoryNames[c.ID])), paint(scoreStyle(c.Score), fmt.Sprint(c.Score)))
+		var rows []Finding
+		hidden := 0
+		for _, f := range r.Findings {
+			if f.Category != c.ID {
+				continue
+			}
+			if !opt.Verbose && f.Severity == string(check.Info) {
+				hidden++
+				continue
+			}
+			rows = append(rows, f)
+			if f.Link != "" {
+				links = append(links, f)
+			}
+		}
+		// Each category is its own table, so clip per category.
+		resW, whatW, fixW := columnWidths(rows, opt.Width)
+		// Align first, colour after: escape codes would confuse tabwriter.
+		var buf bytes.Buffer
+		tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+		for _, f := range rows {
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", f.Severity, clip(f.Resource, resW), clip(f.What, whatW), clip(f.Fix, fixW))
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		for _, line := range strings.Split(strings.TrimRight(buf.String(), "\n"), "\n") {
+			if line == "" {
+				continue
+			}
+			sev := strings.Fields(line)[0]
+			fmt.Fprintln(w, paint(severityStyle[sev], strings.TrimRight(line, " ")))
+		}
+		if hidden > 0 {
+			fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hidden)))
+		}
+	}
+
+	if len(links) > 0 {
+		fmt.Fprint(w, "\n"+paint(bold, "LINKS")+"\n")
+		for _, f := range links {
+			fmt.Fprintf(w, "  %s: %s\n", f.Resource, f.Link)
+		}
+	}
+	if len(r.Errors) > 0 {
+		fmt.Fprint(w, "\n"+paint(bold+red, "COLLECTOR ERRORS")+"\n")
+		for _, e := range r.Errors {
+			fmt.Fprintln(w, "  "+strings.TrimSpace(e))
+		}
+	}
+	fmt.Fprintln(w)
+	return nil
+}
+
 // columnWidths fits resource, what and fix into width. Fixed columns are
-// severity (10), points (3) and category (10) plus five 2-space gaps.
-// what and resource give way first; fix is dropped when there's no room.
+// the indent (2), severity (8) and three 2-space gaps. what and resource
+// give way first; fix is dropped when there's no room.
 func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	for _, f := range fs {
 		resW = max(resW, utf8.RuneCountInString(f.Resource))
@@ -127,10 +209,8 @@ func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	if width <= 0 {
 		return resW, whatW, fixW
 	}
-	const fixed = 10 + 3 + 10 + 5*2
+	const fixed = 2 + 8 + 3*2
 	avail := width - fixed
-	resW = min(resW, 40)
-	whatW = min(whatW, 70)
 	for _, step := range []struct{ res, what int }{{40, 70}, {40, 50}, {30, 40}, {24, 32}} {
 		resW, whatW = min(resW, step.res), min(whatW, step.what)
 		if left := avail - resW - whatW; left >= 24 {
@@ -155,9 +235,7 @@ func gradeStyle(letter string) string {
 	switch letter {
 	case "A+", "A":
 		return bold + green
-	case "B":
-		return bold + yellow
-	case "C":
+	case "B", "C":
 		return bold + yellow
 	default:
 		return bold + red
@@ -173,60 +251,4 @@ func scoreStyle(score int) string {
 	default:
 		return red
 	}
-}
-
-// WriteText renders the report. width is the terminal width in columns, or
-// 0 when unknown, in which case nothing is clipped.
-func WriteText(w io.Writer, r Report, color bool, width int) error {
-	paint := func(style, s string) string {
-		if !color || style == "" {
-			return s
-		}
-		return style + s + reset
-	}
-
-	fmt.Fprintf(w, "%s  cluster: %s  scanned: %s  duration: %.1fs\n\n",
-		paint(bold, "kubegrade v"+r.Agent), r.Cluster, r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
-	fmt.Fprintf(w, "GRADE  %s (%d)", paint(gradeStyle(r.Grade), fmt.Sprintf("%-3s", r.Grade)), r.Score)
-	if r.CappedBy != "" {
-		fmt.Fprintf(w, "   capped by: %s", check.CategoryNames[r.CappedBy])
-	}
-	fmt.Fprint(w, "\n\n")
-
-	for _, c := range r.Categories {
-		fmt.Fprintf(w, "%-12s %s   %s\n", check.CategoryNames[c.ID],
-			paint(scoreStyle(c.Score), fmt.Sprintf("%3d", c.Score)), c.Summary)
-	}
-
-	fmt.Fprint(w, "\n"+paint(bold, "FINDINGS")+" (ordered by points)\n\n")
-	// Align first, colour after: escape codes would confuse tabwriter.
-	resW, whatW, fixW := columnWidths(r.Findings, width)
-	var buf bytes.Buffer
-	tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-	for _, f := range r.Findings {
-		pts := ""
-		if f.Points > 0 {
-			pts = fmt.Sprintf("-%d", f.Points)
-		}
-		fmt.Fprintf(tw, "[%s]\t%s\t%s\t%s\t%s\t%s\n", f.Severity, pts, f.Category,
-			clip(f.Resource, resW), clip(f.What, whatW), clip(f.Fix, fixW))
-	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
-	for _, line := range strings.SplitAfter(buf.String(), "\n") {
-		if line == "" {
-			continue
-		}
-		sev := line[1:strings.IndexByte(line, ']')]
-		fmt.Fprint(w, paint(severityStyle[sev], strings.TrimRight(line, "\n"))+"\n")
-	}
-	if len(r.Errors) > 0 {
-		fmt.Fprint(w, "\n"+paint(bold+red, "COLLECTOR ERRORS")+"\n\n")
-		for _, e := range r.Errors {
-			fmt.Fprintln(w, "  "+strings.TrimSpace(e))
-		}
-	}
-	fmt.Fprintln(w)
-	return nil
 }

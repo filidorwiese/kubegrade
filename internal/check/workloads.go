@@ -64,7 +64,7 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 				tagOnly = true
 			}
 			if ref.digest == "" && (ref.tag == "" || ref.tag == "latest") {
-				unpinned = append(unpinned, img)
+				unpinned = append(unpinned, shortImage(img))
 			}
 		}
 		if tagOnly {
@@ -92,6 +92,14 @@ func images(d appsv1.Deployment) []string {
 		out = append(out, c.Image)
 	}
 	return out
+}
+
+// shortImage drops the registry and path: "ghcr.io/org/app:latest" -> "app:latest".
+func shortImage(img string) string {
+	if i := strings.LastIndex(img, "/"); i >= 0 {
+		return img[i+1:]
+	}
+	return img
 }
 
 type imageRef struct{ tag, digest string }
@@ -135,21 +143,22 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		switch {
 		case latest.Major > cur.Major:
 			f.Severity = Medium
-			f.What = "chart " + r.Chart + " " + r.Version + ", major " + up.Version + " available"
+			f.What = "major " + up.Version + " available, have " + r.Version
 			f.Fix = "major upgrade, read the changelog first"
-			if up.Source != "" {
-				f.Fix += ": " + up.Source
-			}
+			f.Link = up.Source
 		case latest.Minor > cur.Minor:
 			f.Severity = Low
 			f.Count = min(latest.Minor-cur.Minor, 3)
-			f.What = "chart " + r.Chart + " " + r.Version + ", " + plural(latest.Minor-cur.Minor, "minor") + " behind " + up.Version
+			f.What = plural(latest.Minor-cur.Minor, "minor") + " behind " + up.Version + ", have " + r.Version
 		default:
 			f.Severity = Info
-			f.What = "chart " + r.Chart + " " + r.Version + ", patch " + up.Version + " available"
+			f.What = "patch " + up.Version + " available, have " + r.Version
 		}
 		if up.Guessed {
-			f.Fix += "; upstream guessed as " + up.Repo + ", pin it in charts.yaml if wrong"
+			f.Fix += " (upstream guessed, pin in charts.yaml if wrong)"
+			if f.Link == "" {
+				f.Link = up.Repo
+			}
 		}
 		out = append(out, f)
 	}
