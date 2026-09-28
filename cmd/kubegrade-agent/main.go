@@ -1,0 +1,160 @@
+// Command kubegrade-agent scans the cluster it runs in on a timer and prints
+// findings plus a letter grade to stdout. Nothing leaves the cluster unless
+// --online is set, which only fetches public EOL tables.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/filidorwiese/kubegrade/internal/check"
+	"github.com/filidorwiese/kubegrade/internal/collect"
+	"github.com/filidorwiese/kubegrade/internal/data"
+	"github.com/filidorwiese/kubegrade/internal/grade"
+	"github.com/filidorwiese/kubegrade/internal/report"
+	"github.com/filidorwiese/kubegrade/internal/state"
+)
+
+// version is set with -ldflags "-X main.version=..."
+var version = "dev"
+
+type options struct {
+	kubeconfig  string
+	interval    time.Duration
+	once        bool
+	format      string
+	clusterName string
+	online      bool
+}
+
+func main() {
+	var o options
+	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; in-cluster config when empty")
+	flag.DurationVar(&o.interval, "interval", 15*time.Minute, "time between scans")
+	flag.BoolVar(&o.once, "once", false, "run a single scan and exit")
+	flag.StringVar(&o.format, "format", "text", "output format: text or json")
+	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
+	flag.BoolVar(&o.online, "online", false, "fetch EOL tables from endoflife.date each scan")
+	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
+	if o.format != "text" && o.format != "json" {
+		fmt.Fprintln(os.Stderr, "--format must be text or json")
+		os.Exit(2)
+	}
+
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if err := run(o, log); err != nil {
+		log.Error("fatal", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(o options, log *slog.Logger) error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	cfg, ctxName, err := loadConfig(o.kubeconfig)
+	if err != nil {
+		return err
+	}
+	if o.clusterName == "" {
+		o.clusterName = ctxName
+	}
+
+	tables, err := data.Embedded()
+	if err != nil {
+		return fmt.Errorf("embedded data: %w", err)
+	}
+	collector, err := collect.New(cfg, tables, log)
+	if err != nil {
+		return err
+	}
+	store := state.New()
+
+	for {
+		if err := scan(ctx, o, collector, store, log); err != nil {
+			if o.once {
+				return err
+			}
+			log.Error("scan failed", "err", err)
+		}
+		if o.once {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(o.interval):
+		}
+	}
+}
+
+func scan(ctx context.Context, o options, c *collect.Collector, st *state.Store, log *slog.Logger) error {
+	start := time.Now()
+	if o.online {
+		t, err := data.Online(ctx)
+		if err != nil {
+			return fmt.Errorf("online tables: %w", err)
+		}
+		c.SetTables(t)
+	}
+	snap, err := c.Collect(ctx)
+	if err != nil {
+		return err
+	}
+	findings := check.Run(ctx, snap, st)
+	result := grade.Compute(findings)
+
+	r := report.Build(report.Input{
+		Agent: version, Cluster: o.clusterName, ScannedAt: snap.ScannedAt, Duration: time.Since(start),
+		Findings: findings, Result: result, Errors: snap.Errors,
+		DataGenerated: snap.Tables.Generated(), DataSource: snap.Tables.Source,
+	})
+	if o.format == "json" {
+		return report.WriteJSON(os.Stdout, r)
+	}
+	return report.WriteText(os.Stdout, r)
+}
+
+// loadConfig prefers in-cluster config and falls back to kubeconfig. The
+// second return is the cluster name fallback.
+func loadConfig(path string) (*rest.Config, string, error) {
+	if path == "" {
+		if cfg, err := rest.InClusterConfig(); err == nil {
+			return cfg, "in-cluster", nil
+		} else if !errors.Is(err, rest.ErrNotInCluster) {
+			return nil, "", err
+		}
+	}
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	rules.ExplicitPath = path
+	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
+	raw, err := cc.RawConfig()
+	if err != nil {
+		return nil, "", err
+	}
+	cfg, err := cc.ClientConfig()
+	if err != nil {
+		return nil, "", err
+	}
+	name := raw.CurrentContext
+	if name == "" {
+		name = "unknown"
+	}
+	return cfg, name, nil
+}

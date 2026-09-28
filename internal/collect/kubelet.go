@@ -1,0 +1,53 @@
+package collect
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+)
+
+// statsSummary is the slice of the kubelet /stats/summary we need.
+type statsSummary struct {
+	Pods []struct {
+		Volume []struct {
+			UsedBytes     uint64 `json:"usedBytes"`
+			CapacityBytes uint64 `json:"capacityBytes"`
+			PVCRef        *struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"pvcRef"`
+		} `json:"volume"`
+	} `json:"pods"`
+}
+
+// volumeStats reads PVC usage through nodes/proxy. One failing node is
+// recorded and skipped; the rest still report.
+func (c *Collector) volumeStats(ctx context.Context, s *Snapshot) error {
+	for _, node := range s.Nodes {
+		raw, err := c.cs.CoreV1().RESTClient().Get().
+			Resource("nodes").Name(node.Name).
+			SubResource("proxy").Suffix("stats/summary").
+			DoRaw(ctx)
+		if err != nil {
+			s.Errors = append(s.Errors, fmt.Sprintf("kubelet stats %s: %v", node.Name, err))
+			continue
+		}
+		var sum statsSummary
+		if err := json.Unmarshal(raw, &sum); err != nil {
+			s.Errors = append(s.Errors, fmt.Sprintf("kubelet stats %s: %v", node.Name, err))
+			continue
+		}
+		for _, p := range sum.Pods {
+			for _, v := range p.Volume {
+				if v.PVCRef == nil || v.CapacityBytes == 0 {
+					continue
+				}
+				s.VolumeStats = append(s.VolumeStats, VolumeStat{
+					Node: node.Name, Namespace: v.PVCRef.Namespace, PVC: v.PVCRef.Name,
+					Used: v.UsedBytes, Capacity: v.CapacityBytes,
+				})
+			}
+		}
+	}
+	return nil
+}
