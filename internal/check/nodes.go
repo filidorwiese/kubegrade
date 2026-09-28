@@ -116,7 +116,7 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		} else {
 			kernel += " not LTS"
 		}
-		what := os + ", " + kernel + ", " + ni.ContainerRuntimeVersion
+		what := os + ", " + kernel
 		g, ok := groups[what]
 		if !ok {
 			g = &group{what: what}
