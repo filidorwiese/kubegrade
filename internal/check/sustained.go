@@ -233,6 +233,54 @@ func (r termReason) fix(fallback string) string {
 	return fallback
 }
 
+// pullFailures are container waiting reasons that mean the image never
+// arrives; they hold a pod in Pending forever with no scheduling problem.
+var pullFailures = map[string]bool{"ImagePullBackOff": true, "ErrImagePull": true, "InvalidImageName": true}
+
+// stuckImage returns the first container image that cannot be pulled.
+func stuckImage(p corev1.Pod) (image, reason string) {
+	all := append(p.Status.InitContainerStatuses, p.Status.ContainerStatuses...)
+	for _, cs := range all {
+		if cs.State.Waiting != nil && pullFailures[cs.State.Waiting.Reason] {
+			return cs.Image, cs.State.Waiting.Reason
+		}
+	}
+	return "", ""
+}
+
+type imagePull struct{}
+
+func (imagePull) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	type group struct {
+		pods          int
+		image, reason string
+	}
+	groups := map[string]*group{}
+	var order []string
+	for _, p := range s.Pods {
+		image, reason := stuckImage(p)
+		if image == "" {
+			continue
+		}
+		owner := ownerOf(p, s.ReplicaSets)
+		g := groups[owner]
+		if g == nil {
+			g = &group{image: image, reason: reason}
+			groups[owner] = g
+			order = append(order, owner)
+		}
+		g.pods++
+	}
+	var out []Finding
+	for _, owner := range order {
+		g := groups[owner]
+		out = append(out, Finding{ID: "image-pull", Category: Health, Severity: Medium, Resource: owner,
+			What: "cannot pull " + shortImage(g.image) + " on " + plural(g.pods, "pod") + " (" + g.reason + ")",
+			Fix:  "check image name, tag and pull secret"})
+	}
+	return out
+}
+
 type podPending struct{}
 
 func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
@@ -240,6 +288,9 @@ func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	for _, p := range s.Pods {
 		if p.Status.Phase != corev1.PodPending {
 			continue
+		}
+		if img, _ := stuckImage(p); img != "" {
+			continue // imagePull names the real cause
 		}
 		since := p.CreationTimestamp.Time
 		dur := s.ScannedAt.Sub(since)
@@ -256,9 +307,13 @@ func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 type deployUnavailable struct{}
 
 func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
-	// A crash-looping deployment is unavailable by definition; one finding.
+	// A crash-looping or unpullable deployment is unavailable by definition;
+	// the check naming the cause is the one finding.
 	looping := map[string]bool{}
 	for _, p := range s.Pods {
+		if img, _ := stuckImage(p); img != "" {
+			looping[ownerOf(p, s.ReplicaSets)] = true
+		}
 		for _, cs := range p.Status.ContainerStatuses {
 			if cs.State.Waiting != nil && cs.State.Waiting.Reason == "CrashLoopBackOff" {
 				looping[ownerOf(p, s.ReplicaSets)] = true
