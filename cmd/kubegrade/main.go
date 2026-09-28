@@ -31,6 +31,7 @@ type options struct {
 	kubeconfig  string
 	format      string
 	clusterName string
+	noColor     bool
 }
 
 func main() {
@@ -38,6 +39,7 @@ func main() {
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; defaults to $KUBECONFIG or ~/.kube/config")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
+	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -97,7 +99,16 @@ func run(o options, log *slog.Logger) error {
 	if o.format == "json" {
 		return report.WriteJSON(os.Stdout, rep)
 	}
-	return report.WriteText(os.Stdout, rep)
+	return report.WriteText(os.Stdout, rep, useColor(o))
+}
+
+// useColor is on for a terminal stdout unless --no-color or NO_COLOR is set.
+func useColor(o options) bool {
+	if o.noColor || os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
 // loadConfig loads the kubeconfig. The second return is the cluster name

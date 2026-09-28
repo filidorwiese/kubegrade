@@ -17,6 +17,7 @@ Free, open-source CLI. Single Go binary that scans a cluster through kubeconfig 
 | Deprecated APIs | Pluto `versions.yaml` vendored; k8s rows only; objects count only when managedFields or last-applied show the deprecated version |
 | Cluster name | `--cluster-name`, fallback kubeconfig context or `in-cluster` |
 | Online | always. Kubernetes, kernel, OS tables fetched from endoflife.date at startup; fetch failure exits with an error. `--online` flag and embedded EOL yaml removed 2026-09-28. Pluto table and chart mapping stay embedded |
+| Colour | text output coloured by severity and score when stdout is a tty; `--no-color` or `NO_COLOR` disables. Category emoji: 🔄 up to date, 🧹 hygiene, 💚 health |
 | Progress | single-line bar on stderr, only when stderr is a tty; stdout stays clean for JSON |
 | Chart lookups | 8 concurrent workers; Artifact Hub HTTP 429 stops further lookups and is reported as a collector error, no cache yet |
 | Run mode | single scan per invocation; `--interval`/`--once` and the in-memory first-seen store removed 2026-09-28 |

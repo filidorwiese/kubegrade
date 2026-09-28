@@ -3,6 +3,7 @@
 package report
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -93,21 +94,82 @@ func WriteJSON(w io.Writer, r Report) error {
 	return enc.Encode(r)
 }
 
-func WriteText(w io.Writer, r Report) error {
-	fmt.Fprintf(w, "kubegrade v%s  cluster: %s  scanned: %s  duration: %.1fs\n\n",
-		r.Agent, r.Cluster, r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
-	fmt.Fprintf(w, "GRADE  %-3s (%d)", r.Grade, r.Score)
+// ANSI styles; applied only when WriteText is called with color=true.
+const (
+	reset  = "\033[0m"
+	bold   = "\033[1m"
+	dim    = "\033[2m"
+	red    = "\033[31m"
+	green  = "\033[32m"
+	yellow = "\033[33m"
+	blue   = "\033[34m"
+	cyan   = "\033[36m"
+)
+
+var categoryEmoji = map[string]string{
+	check.UpToDate: "🔄",
+	check.Hygiene:  "🧹",
+	check.Health:   "💚",
+}
+
+var severityStyle = map[string]string{
+	"critical": bold + red,
+	"high":     red,
+	"medium":   yellow,
+	"low":      cyan,
+	"info":     dim,
+}
+
+func gradeStyle(letter string) string {
+	switch letter {
+	case "A+", "A":
+		return bold + green
+	case "B":
+		return bold + yellow
+	case "C":
+		return bold + yellow
+	default:
+		return bold + red
+	}
+}
+
+func scoreStyle(score int) string {
+	switch {
+	case score >= 85:
+		return green
+	case score >= 70:
+		return yellow
+	default:
+		return red
+	}
+}
+
+func WriteText(w io.Writer, r Report, color bool) error {
+	paint := func(style, s string) string {
+		if !color || style == "" {
+			return s
+		}
+		return style + s + reset
+	}
+
+	fmt.Fprintf(w, "%s  cluster: %s  scanned: %s  duration: %.1fs\n\n",
+		paint(bold, "kubegrade v"+r.Agent), r.Cluster, r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
+	fmt.Fprintf(w, "GRADE  %s (%d)", paint(gradeStyle(r.Grade), fmt.Sprintf("%-3s", r.Grade)), r.Score)
 	if r.CappedBy != "" {
 		fmt.Fprintf(w, "   capped by: %s", check.CategoryNames[r.CappedBy])
 	}
 	fmt.Fprint(w, "\n\n")
 
 	for _, c := range r.Categories {
-		fmt.Fprintf(w, "%-21s%3d   %s\n", check.CategoryNames[c.ID], c.Score, c.Summary)
+		// Emoji width varies by terminal, so pad the name, not the emoji.
+		fmt.Fprintf(w, "%s %-12s %s   %s\n", categoryEmoji[c.ID], check.CategoryNames[c.ID],
+			paint(scoreStyle(c.Score), fmt.Sprintf("%3d", c.Score)), c.Summary)
 	}
 
-	fmt.Fprint(w, "\nFINDINGS (ordered by points)\n\n")
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprint(w, "\n"+paint(bold, "FINDINGS")+" (ordered by points)\n\n")
+	// Align first, colour after: escape codes would confuse tabwriter.
+	var buf bytes.Buffer
+	tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 	for _, f := range r.Findings {
 		pts := ""
 		if f.Points > 0 {
@@ -118,8 +180,15 @@ func WriteText(w io.Writer, r Report) error {
 	if err := tw.Flush(); err != nil {
 		return err
 	}
+	for _, line := range strings.SplitAfter(buf.String(), "\n") {
+		if line == "" {
+			continue
+		}
+		sev := line[1:strings.IndexByte(line, ']')]
+		fmt.Fprint(w, paint(severityStyle[sev], strings.TrimRight(line, "\n"))+"\n")
+	}
 	if len(r.Errors) > 0 {
-		fmt.Fprint(w, "\nCOLLECTOR ERRORS\n\n")
+		fmt.Fprint(w, "\n"+paint(bold+red, "COLLECTOR ERRORS")+"\n\n")
 		for _, e := range r.Errors {
 			fmt.Fprintln(w, "  "+strings.TrimSpace(e))
 		}
