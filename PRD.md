@@ -17,6 +17,8 @@ Free, open-source CLI. Single Go binary that scans a cluster through kubeconfig 
 | Deprecated APIs | Pluto `versions.yaml` vendored; k8s rows only; objects count only when managedFields or last-applied show the deprecated version |
 | Cluster name | `--cluster-name`, fallback kubeconfig context or `in-cluster` |
 | Online | always. Kubernetes, kernel, OS tables fetched from endoflife.date at startup; fetch failure exits with an error. `--online` flag and embedded EOL yaml removed 2026-09-28. Pluto table and chart mapping stay embedded |
+| Progress | single-line bar on stderr, only when stderr is a tty; stdout stays clean for JSON |
+| Chart lookups | 8 concurrent workers; Artifact Hub HTTP 429 stops further lookups and is reported as a collector error, no cache yet |
 | Run mode | single scan per invocation; `--interval`/`--once` and the in-memory first-seen store removed 2026-09-28 |
 | Certificates | category removed 2026-09-28 (API server cert, TLS secrets, cert-manager) |
 | Chart upstream | Artifact Hub search by exact chart name, disambiguated by Chart.yaml `home`/`sources`, repo-name hint, official flag; else best by verified/stars and flagged guessed. `internal/data/charts.yaml` overrides with a repo URL (fetch `index.yaml`). Semver compare. Medium if major behind (fix points at the chart sources URL for the changelog), low per minor (max 3), info for patch. Unmapped chart is info. Repo fetch failure is a collector error, not a scan abort |
@@ -45,6 +47,7 @@ internal/collect/    snapshot builders (nodes, pods, deployments, helm, pvc, kub
 internal/check/      one file per category
 internal/grade/      scoring, letters, cap
 internal/report/     text + json
+internal/progress/   stderr progress bar
 internal/data/       embedded Pluto table + charts.yaml override, endoflife.date fetch, semver
 hack/refresh-data.sh re-vendors Pluto
 Taskfile.yaml

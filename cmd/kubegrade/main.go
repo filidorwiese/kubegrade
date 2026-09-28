@@ -20,6 +20,7 @@ import (
 	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/data"
 	"github.com/filidorwiese/kubegrade/internal/grade"
+	"github.com/filidorwiese/kubegrade/internal/progress"
 	"github.com/filidorwiese/kubegrade/internal/report"
 )
 
@@ -68,34 +69,34 @@ func run(o options, log *slog.Logger) error {
 		o.clusterName = ctxName
 	}
 
-	tables, err := data.Load(ctx)
+	bar, tick := progress.New()
+	defer bar.Done()
+
+	start := time.Now()
+	tables, err := data.Load(ctx, tick)
 	if err != nil {
 		return fmt.Errorf("load EOL tables: %w", err)
 	}
-	collector, err := collect.New(cfg, tables, log)
+	collector, err := collect.New(cfg, tables, log, tick)
 	if err != nil {
 		return err
 	}
-	return scan(ctx, o, collector)
-}
-
-func scan(ctx context.Context, o options, c *collect.Collector) error {
-	start := time.Now()
-	snap, err := c.Collect(ctx)
+	snap, err := collector.Collect(ctx)
 	if err != nil {
 		return err
 	}
+	bar.Done()
 	findings := check.Run(ctx, snap)
 	result := grade.Compute(findings)
 
-	r := report.Build(report.Input{
+	rep := report.Build(report.Input{
 		Agent: version, Cluster: o.clusterName, ScannedAt: snap.ScannedAt, Duration: time.Since(start),
 		Findings: findings, Result: result, Errors: snap.Errors,
 	})
 	if o.format == "json" {
-		return report.WriteJSON(os.Stdout, r)
+		return report.WriteJSON(os.Stdout, rep)
 	}
-	return report.WriteText(os.Stdout, r)
+	return report.WriteText(os.Stdout, rep)
 }
 
 // loadConfig loads the kubeconfig. The second return is the cluster name

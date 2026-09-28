@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"sigs.k8s.io/yaml"
@@ -16,48 +17,100 @@ import (
 	"github.com/filidorwiese/kubegrade/internal/data"
 )
 
-const artifactHub = "https://artifacthub.io/api/v1"
+const (
+	artifactHub  = "https://artifacthub.io/api/v1"
+	chartWorkers = 8
+)
+
+var errRateLimited = fmt.Errorf("rate limited (HTTP 429), retry later or pin charts in charts.yaml")
 
 // chartUpstream resolves the newest upstream version for every distinct
-// chart in use. charts.yaml wins; otherwise Artifact Hub is searched.
+// chart in use, a few at a time. charts.yaml wins; otherwise Artifact Hub
+// is searched. Index files are fetched once per repo.
 func (c *Collector) chartUpstream(ctx context.Context, s *Snapshot) error {
 	s.ChartLatest = map[string]ChartUpstream{}
-	indexes := map[string]*repoIndex{}
-	done := map[string]bool{}
+
+	var charts []HelmRelease // first release per chart name, for home/sources
+	seen := map[string]bool{}
 	for _, r := range s.HelmReleases {
-		if done[r.Chart] {
-			continue
-		}
-		done[r.Chart] = true
-
-		if repo, ok := c.tables.Charts.Repo(r.Chart); ok {
-			idx, seen := indexes[repo]
-			if !seen {
-				var err error
-				if idx, err = fetchIndex(ctx, repo); err != nil {
-					s.Errors = append(s.Errors, "chart repo "+repo+": "+err.Error())
-				}
-				indexes[repo] = idx
-			}
-			if idx != nil {
-				if up, ok := newestStable(idx, r.Chart); ok {
-					up.Repo, up.Via = repo, "charts.yaml"
-					s.ChartLatest[r.Chart] = up
-				}
-			}
-			continue
-		}
-
-		up, err := resolveArtifactHub(ctx, r)
-		if err != nil {
-			s.Errors = append(s.Errors, "artifacthub "+r.Chart+": "+err.Error())
-			continue
-		}
-		if up != nil {
-			s.ChartLatest[r.Chart] = *up
+		if !seen[r.Chart] {
+			seen[r.Chart] = true
+			charts = append(charts, r)
 		}
 	}
+	const phase = "resolving chart upstreams"
+	c.report(phase, 0, len(charts))
+
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		done     int
+		indexes  = map[string]*repoIndex{}
+		indexMu  sync.Mutex
+		sem      = make(chan struct{}, chartWorkers)
+		rateHit  bool
+		addError = func(msg string) { mu.Lock(); s.Errors = append(s.Errors, msg); mu.Unlock() }
+	)
+	for _, r := range charts {
+		wg.Add(1)
+		go func(r HelmRelease) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			var up *ChartUpstream
+			if repo, ok := c.tables.Charts.Repo(r.Chart); ok {
+				up = resolveIndex(ctx, r, repo, indexes, &indexMu, addError)
+			} else {
+				mu.Lock()
+				skip := rateHit
+				mu.Unlock()
+				if !skip {
+					var err error
+					up, err = resolveArtifactHub(ctx, r)
+					if err == errRateLimited {
+						mu.Lock()
+						rateHit = true
+						mu.Unlock()
+					}
+					if err != nil {
+						addError("artifacthub " + r.Chart + ": " + err.Error())
+					}
+				}
+			}
+			mu.Lock()
+			if up != nil {
+				s.ChartLatest[r.Chart] = *up
+			}
+			done++
+			c.report(phase, done, len(charts))
+			mu.Unlock()
+		}(r)
+	}
+	wg.Wait()
 	return nil
+}
+
+func resolveIndex(ctx context.Context, r HelmRelease, repo string, cache map[string]*repoIndex, mu *sync.Mutex, addError func(string)) *ChartUpstream {
+	mu.Lock()
+	defer mu.Unlock() // serialises per-repo fetches; overrides are few
+	idx, seen := cache[repo]
+	if !seen {
+		var err error
+		if idx, err = fetchIndex(ctx, repo); err != nil {
+			addError("chart repo " + repo + ": " + err.Error())
+		}
+		cache[repo] = idx
+	}
+	if idx == nil {
+		return nil
+	}
+	up, ok := newestStable(idx, r.Chart)
+	if !ok {
+		return nil
+	}
+	up.Repo, up.Via = repo, "charts.yaml"
+	return &up
 }
 
 // --- Artifact Hub ---
@@ -152,6 +205,9 @@ func resolveArtifactHub(ctx context.Context, r HelmRelease) (*ChartUpstream, err
 		}
 		var d ahDetail
 		if err := getJSON(ctx, artifactHub+"/packages/helm/"+p.Repository.Name+"/"+p.Name, &d); err != nil {
+			if err == errRateLimited {
+				return nil, err
+			}
 			continue
 		}
 		up := fromDetail(d)
@@ -229,6 +285,9 @@ func getJSON(ctx context.Context, u string, dst any) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return errRateLimited
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}

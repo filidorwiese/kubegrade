@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/filidorwiese/kubegrade/internal/progress"
 )
 
 const eolBase = "https://endoflife.date/api/"
@@ -42,23 +44,31 @@ func (c cycle) isLTS() bool {
 
 // Load fetches the EOL tables from endoflife.date on top of the embedded
 // static ones. Any fetch error fails the whole call.
-func Load(ctx context.Context) (*Tables, error) {
+func Load(ctx context.Context, report progress.Func) (*Tables, error) {
 	t, err := embedded()
 	if err != nil {
 		return nil, err
 	}
+	const phase = "fetching EOL tables"
+	total := 2 + len(osProducts)
+	step := 0
+	report(phase, step, total)
 
 	k8s, err := fetch(ctx, "kubernetes")
 	if err != nil {
 		return nil, err
 	}
 	t.Kubernetes = buildKubernetes(k8s)
+	step++
+	report(phase, step, total)
 
 	linux, err := fetch(ctx, "linux")
 	if err != nil {
 		return nil, err
 	}
 	t.Kernel = buildKernel(linux)
+	step++
+	report(phase, step, total)
 
 	t.OS = OS{}
 	for _, p := range osProducts {
@@ -67,6 +77,8 @@ func Load(ctx context.Context) (*Tables, error) {
 			return nil, err
 		}
 		t.OS.Distros = append(t.OS.Distros, p.build(cycles)...)
+		step++
+		report(phase, step, total)
 	}
 	t.OS.Distros = append(t.OS.Distros, rollingDistros...)
 	return t, nil
