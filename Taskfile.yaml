@@ -1,0 +1,50 @@
+version: "3"
+
+vars:
+  IMAGE: ghcr.io/filidorwiese/kubegrade-agent
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+
+tasks:
+  build:
+    desc: Build the binary into bin/
+    cmds:
+      - CGO_ENABLED=0 go build -trimpath -ldflags "-X main.version={{.VERSION}}" -o bin/kubegrade-agent ./cmd/kubegrade-agent
+
+  run:
+    desc: Single scan against the current kubeconfig context
+    cmds:
+      - go run ./cmd/kubegrade-agent --kubeconfig ${KUBECONFIG:-$HOME/.kube/config} --once {{.CLI_ARGS}}
+
+  image:
+    desc: Build the container image locally
+    cmds:
+      - docker build --build-arg VERSION={{.VERSION}} -t {{.IMAGE}}:{{.VERSION}} -t {{.IMAGE}}:latest .
+
+  gen-rbac:
+    desc: Regenerate deploy/rbac.yaml from the deprecation table
+    cmds:
+      - go run ./hack/gen-rbac deploy/rbac.yaml
+
+  refresh-data:
+    desc: Refresh embedded EOL tables from endoflife.date and Pluto
+    cmds:
+      - ./hack/refresh-data.sh
+      - task: gen-rbac
+
+  deploy:
+    desc: Apply manifests (expects secret ghcr-token in ns kubegrade)
+    cmds:
+      - kubectl apply -k deploy/
+      - kubectl -n kubegrade rollout restart deploy/kubegrade-agent
+      - kubectl -n kubegrade rollout status deploy/kubegrade-agent
+
+  logs:
+    desc: Follow the agent report output
+    cmds:
+      - kubectl -n kubegrade logs -f deploy/kubegrade-agent
+
+  undeploy:
+    desc: Remove the agent and its RBAC
+    cmds:
+      - kubectl delete -k deploy/

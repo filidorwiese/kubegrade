@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,10 +21,7 @@ const lastApplied = "kubectl.kubernetes.io/last-applied-configuration"
 // was written with the deprecated version.
 func (c *Collector) deprecatedAPIs(ctx context.Context, s *Snapshot) error {
 	served := map[string]map[string]string{} // groupVersion -> kind -> resource
-	for _, dep := range c.tables.Deprecations.Versions {
-		if dep.Component != "k8s" {
-			continue
-		}
+	for _, dep := range K8sDeprecations(c.tables) {
 		kinds, ok := served[dep.Version]
 		if !ok {
 			kinds = map[string]string{}
@@ -89,11 +87,12 @@ func containsVerb(verbs []string, verb string) bool {
 	return false
 }
 
-// K8sDeprecations returns the k8s rows, used by hack/gen-rbac.
+// K8sDeprecations returns the k8s rows that name real resources; Pluto also
+// lists *List kinds, which cannot be listed themselves.
 func K8sDeprecations(t *data.Tables) []data.Deprecation {
 	var out []data.Deprecation
 	for _, d := range t.Deprecations.Versions {
-		if d.Component == "k8s" {
+		if d.Component == "k8s" && !strings.HasSuffix(d.Kind, "List") {
 			out = append(out, d)
 		}
 	}

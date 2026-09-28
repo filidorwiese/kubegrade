@@ -78,7 +78,7 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []F
 	}
 	if noDigest > 0 {
 		out = append(out, Finding{ID: "image-no-digest", Category: Workloads, Severity: Info,
-			Resource: "deployments", What: plural(noDigest, "deployment") + " reference images by tag without digest"})
+			Resource: "deployments", What: "images by tag without digest: " + plural(noDigest, "deployment")})
 	}
 	return out
 }
