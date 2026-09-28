@@ -23,21 +23,24 @@ Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color
 Needs cluster-wide read access, including Helm release secrets.
 
 ```
-GRADE  B   capped by: Hygiene
+  █████     Versions  A   1 medium, 1 low
+  ██  ██    Hygiene   B   2 medium, 1 low
+  █████     Health    A   1 medium
+  ██  ██
+  █████     capped by Hygiene
 
-VERSIONS  A
-  medium  helm traefik/traefik    major 41.6.0 available, have 40.3.0  major upgrade, read the changelog first
-  low     helm kube-system/kured  1 minor behind 6.1.0, have 6.0.0     helm upgrade to 6.1.0
-  2 info hidden, -v to show
+┌──────────┬──────────┬────────────────────────┬──────────────────────────────────────┬─────────────────────────────┐
+│ Category │ Severity │ Resource               │ Finding                              │ Fix                         │
+├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
+│ versions │ medium   │ helm traefik/traefik   │ major 41.6.0 available, have 40.3.0  │ major upgrade, read the ch… │
+├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
+│ hygiene  │ medium   │ deploy shop/checkout   │ image checkout-api:latest            │ pin a version tag           │
+├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
+│ health   │ medium   │ deploy shop/plausible  │ CrashLoopBackOff 1/1 pods (exit 1)   │ kubectl logs -p             │
+└──────────┴──────────┴────────────────────────┴──────────────────────────────────────┴─────────────────────────────┘
+  3 info hidden, -v to show
 
-HYGIENE  B
-  medium  deploy shop/checkout    image checkout-api:latest            pin a version tag
-  low     node worker2            kernel 6.12.63 differs from 4 nodes on 6.12.107  pending reboot or upgrade
-
-HEALTH  B
-  medium  deploy shop/plausible   CrashLoopBackOff 1/1 pods, 5 restarts (exit 1)  kubectl logs -p
-
-EXTERNAL LINKS
+External links
   helm traefik/traefik: https://github.com/traefik/traefik-helm-chart
 ```
 

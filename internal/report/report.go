@@ -3,13 +3,11 @@
 package report
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"time"
 	"unicode/utf8"
 
@@ -124,7 +122,18 @@ type TextOptions struct {
 	Verbose bool // show info findings
 }
 
-// WriteText renders the report grouped by category, severe first.
+// Block letters, 5 rows by 6 columns, for the grade banner.
+var glyphs = map[string][5]string{
+	"A": {" ████ ", "██  ██", "██████", "██  ██", "██  ██"},
+	"B": {"█████ ", "██  ██", "█████ ", "██  ██", "█████ "},
+	"C": {" █████", "██    ", "██    ", "██    ", " █████"},
+	"D": {"█████ ", "██  ██", "██  ██", "██  ██", "█████ "},
+	"F": {"██████", "██    ", "█████ ", "██    ", "██    "},
+	"+": {"      ", "  ██  ", "██████", "  ██  ", "      "},
+}
+
+// WriteText renders the grade banner with the category breakdown beside
+// it, then one table of all findings sorted by category and severity.
 func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	paint := func(style, s string) string {
 		if !opt.Color || style == "" {
@@ -135,61 +144,131 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 
 	fmt.Fprintf(w, "%s  scanned: %s  duration: %.1fs\n\n",
 		paint(bold, "kubegrade v"+r.Agent), r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
-	fmt.Fprintf(w, "GRADE  %s", paint(gradeStyle(r.Grade), r.Grade))
-	if r.CappedBy != "" {
-		fmt.Fprintf(w, "   capped by: %s", check.CategoryNames[r.CappedBy])
-	}
-	fmt.Fprint(w, "\n")
 
-	var links []Finding
+	// Banner: block letter left, breakdown right.
+	var banner [5]string
+	for _, ch := range strings.Split(r.Grade, "") {
+		g := glyphs[ch]
+		for i := range banner {
+			banner[i] += g[i] + " "
+		}
+	}
+	bannerW := utf8.RuneCountInString(banner[0])
+	var side []string
 	for _, c := range r.Categories {
-		fmt.Fprintf(w, "\n%s  %s\n", paint(bold, strings.ToUpper(check.CategoryNames[c.ID])), paint(gradeStyle(c.Grade), c.Grade))
-		var rows []Finding
-		hidden := 0
-		for _, f := range r.Findings {
-			if f.Category != c.ID {
-				continue
-			}
-			if !opt.Verbose && f.Severity == string(check.Info) {
-				hidden++
-				continue
-			}
-			rows = append(rows, f)
-			if f.Link != "" {
-				links = append(links, f)
-			}
+		side = append(side, fmt.Sprintf("%-9s %s  %s", check.CategoryNames[c.ID], paint(gradeStyle(c.Grade), fmt.Sprintf("%-2s", c.Grade)), summarise(r.Findings, c.ID)))
+	}
+	if r.CappedBy != "" {
+		side = append(side, "", paint(dim, "capped by "+check.CategoryNames[r.CappedBy]))
+	}
+	for i := range banner {
+		line := "  " + paint(gradeStyle(r.Grade), banner[i])
+		if i < len(side) {
+			line += "   " + side[i]
 		}
-		// Each category is its own table, so clip per category.
+		fmt.Fprintln(w, strings.TrimRight(line, " "))
+	}
+	for i := len(banner); i < len(side); i++ {
+		fmt.Fprintln(w, strings.Repeat(" ", bannerW+5)+side[i])
+	}
+	fmt.Fprintln(w)
+
+	// Findings table.
+	var rows []Finding
+	hidden := 0
+	var links []Finding
+	for _, f := range r.Findings {
+		if !opt.Verbose && f.Severity == string(check.Info) {
+			hidden++
+			continue
+		}
+		rows = append(rows, f)
+		if f.Link != "" {
+			links = append(links, f)
+		}
+	}
+	catOrder := map[string]int{}
+	for i, c := range check.Categories {
+		catOrder[c] = i
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if catOrder[rows[i].Category] != catOrder[rows[j].Category] {
+			return catOrder[rows[i].Category] < catOrder[rows[j].Category]
+		}
+		return rows[i].Points > rows[j].Points
+	})
+
+	if len(rows) > 0 {
 		resW, whatW, fixW := columnWidths(rows, opt.Width)
-		// Align first, colour after: escape codes would confuse tabwriter.
-		var buf bytes.Buffer
-		tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-		for _, f := range rows {
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", f.Severity, clip(f.Resource, resW), clip(f.What, whatW), clip(f.Fix, fixW))
+		headers := []string{"Category", "Severity", "Resource", "Finding", "Fix"}
+		widths := []int{8, 8, max(resW, 8), max(whatW, 7), max(fixW, 3)}
+		var fixes []Finding
+		if fixW == 0 {
+			headers, widths = headers[:4], widths[:4]
 		}
-		if err := tw.Flush(); err != nil {
-			return err
-		}
-		for _, line := range strings.Split(strings.TrimRight(buf.String(), "\n"), "\n") {
-			if line == "" {
-				continue
+		cells := func(f Finding) []string {
+			c := []string{f.Category, f.Severity, clip(f.Resource, resW), clip(f.What, whatW)}
+			if fixW > 0 {
+				c = append(c, clip(f.Fix, fixW))
+			} else if f.Fix != "" {
+				fixes = append(fixes, f)
 			}
-			sev := strings.Fields(line)[0]
-			fmt.Fprintln(w, paint(severityStyle[sev], strings.TrimRight(line, " ")))
+			return c
 		}
-		if hidden > 0 {
-			fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hidden)))
+		rule := func(l, m, r string) string {
+			parts := make([]string, len(widths))
+			for i, n := range widths {
+				parts[i] = strings.Repeat("─", n+2)
+			}
+			return paint(dim, l+strings.Join(parts, m)+r)
 		}
+		row := func(c []string, style func(i int, s string) string) string {
+			var b strings.Builder
+			b.WriteString(paint(dim, "│"))
+			for i, s := range c {
+				pad := widths[i] - utf8.RuneCountInString(s)
+				b.WriteString(" " + style(i, s) + strings.Repeat(" ", pad) + " " + paint(dim, "│"))
+			}
+			return b.String()
+		}
+		plain := func(_ int, s string) string { return s }
+		fmt.Fprintln(w, rule("┌", "┬", "┐"))
+		fmt.Fprintln(w, row(headers, func(_ int, s string) string { return paint(bold, s) }))
+		fmt.Fprintln(w, rule("├", "┼", "┤"))
+		for i, f := range rows {
+			if i > 0 {
+				fmt.Fprintln(w, rule("├", "┼", "┤"))
+			}
+			sev := f.Severity
+			fmt.Fprintln(w, row(cells(f), func(i int, s string) string {
+				if i == 1 {
+					return paint(severityStyle[sev], s)
+				}
+				return plain(i, s)
+			}))
+		}
+		fmt.Fprintln(w, rule("└", "┴", "┘"))
+		if len(fixes) > 0 {
+			fmt.Fprintln(w, "\n"+paint(bold, "Fixes"))
+			for _, f := range fixes {
+				fmt.Fprintf(w, "  %s: %s\n", f.Resource, f.Fix)
+			}
+		}
+	} else {
+		fmt.Fprintln(w, paint(dim, "  no findings"))
+	}
+	if hidden > 0 {
+		fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hidden)))
 	}
 
 	if len(links) > 0 {
-		fmt.Fprint(w, "\n"+paint(bold, "EXTERNAL LINKS")+"\n")
+		fmt.Fprint(w, "\n"+paint(bold, "External links")+"\n")
 		for _, f := range links {
 			fmt.Fprintf(w, "  %s: %s\n", f.Resource, f.Link)
 		}
 	}
 	if len(r.Errors) > 0 {
-		fmt.Fprint(w, "\n"+paint(bold+red, "COLLECTOR ERRORS")+"\n")
+		fmt.Fprint(w, "\n"+paint(bold+red, "Collector errors")+"\n")
 		for _, e := range r.Errors {
 			fmt.Fprintln(w, "  "+strings.TrimSpace(e))
 		}
@@ -198,9 +277,29 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	return nil
 }
 
-// columnWidths fits resource, what and fix into width. Fixed columns are
-// the indent (2), severity (8) and three 2-space gaps. what and resource
-// give way first; fix is dropped when there's no room.
+// summarise counts non-info findings of a category by severity.
+func summarise(fs []Finding, category string) string {
+	counts := map[string]int{}
+	for _, f := range fs {
+		if f.Category == category && f.Severity != string(check.Info) {
+			counts[f.Severity]++
+		}
+	}
+	var parts []string
+	for _, sev := range []string{"critical", "high", "medium", "low"} {
+		if n := counts[sev]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, sev))
+		}
+	}
+	if len(parts) == 0 {
+		return "no findings"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// columnWidths fits resource, what and fix into width. The box costs
+// 16 columns of borders and padding plus the two 8-wide fixed columns.
+// what and resource give way first; fix is dropped when there's no room.
 func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	for _, f := range fs {
 		resW = max(resW, utf8.RuneCountInString(f.Resource))
@@ -210,7 +309,7 @@ func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	if width <= 0 {
 		return resW, whatW, fixW
 	}
-	const fixed = 2 + 8 + 3*2
+	const fixed = 16 + 8 + 8
 	avail := width - fixed
 	for _, step := range []struct{ res, what int }{{40, 70}, {40, 50}, {30, 40}, {24, 32}} {
 		resW, whatW = min(resW, step.res), min(whatW, step.what)
@@ -242,4 +341,3 @@ func gradeStyle(letter string) string {
 		return bold + red
 	}
 }
-
