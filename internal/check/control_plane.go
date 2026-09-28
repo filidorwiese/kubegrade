@@ -6,7 +6,6 @@ import (
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/data"
-	"github.com/filidorwiese/kubegrade/internal/state"
 )
 
 // k8sVersion covers both the EOL window and versions-behind-latest.
@@ -15,7 +14,7 @@ type k8sVersion struct{}
 func (k8sVersion) ID() string       { return "k8s-version-eol" }
 func (k8sVersion) Category() string { return ControlPlane }
 
-func (k8sVersion) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	tbl := s.Tables.Kubernetes
 	cur := minor(s.ServerVersion)
 	resource := "kubernetes " + trimV(s.ServerVersion)
@@ -66,7 +65,7 @@ type k8sDataStale struct{}
 func (k8sDataStale) ID() string       { return "k8s-data-stale" }
 func (k8sDataStale) Category() string { return ControlPlane }
 
-func (k8sDataStale) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (k8sDataStale) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	gen := s.Tables.Generated()
 	f := Finding{ID: "k8s-data-stale", Category: ControlPlane, Severity: Info, Resource: "data tables"}
 	t, ok := data.ParseDate(gen)
@@ -88,7 +87,7 @@ type k8sDeprecated struct{}
 func (k8sDeprecated) ID() string       { return "k8s-api-deprecated" }
 func (k8sDeprecated) Category() string { return ControlPlane }
 
-func (k8sDeprecated) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (k8sDeprecated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	next := minorInt(minor(s.ServerVersion)) + 1
 	var out []Finding
 	for _, d := range s.Deprecated {

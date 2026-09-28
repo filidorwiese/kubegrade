@@ -3,7 +3,6 @@
 package collect
 
 import (
-	"crypto/x509"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,12 +21,9 @@ type Snapshot struct {
 	ReplicaSets []appsv1.ReplicaSet
 	PVCs        []corev1.PersistentVolumeClaim
 
-	HelmReleases  []HelmRelease
-	TLSSecrets    []TLSSecret
-	APIServerCert *x509.Certificate
-	CertManager   CertManager
-	VolumeStats   []VolumeStat
-	Deprecated    []DeprecatedUse
+	HelmReleases []HelmRelease
+	VolumeStats  []VolumeStat
+	Deprecated   []DeprecatedUse
 	// ChartLatest is chart name -> newest stable upstream; nil when not
 	// running --online.
 	ChartLatest map[string]ChartUpstream
@@ -56,29 +52,6 @@ type ChartUpstream struct {
 	// Source is the first entry of the chart's sources list, usually the
 	// repo holding the changelog.
 	Source string
-}
-
-type TLSSecret struct {
-	Namespace string
-	Name      string
-	Cert      *x509.Certificate
-	// CertManaged is true when cert-manager owns the secret.
-	CertManaged bool
-}
-
-type CertManager struct {
-	Installed    bool
-	Certificates []Certificate
-}
-
-type Certificate struct {
-	Namespace     string
-	Name          string
-	Ready         bool
-	ReadyReason   string
-	IssuingFailed bool
-	IssuingReason string
-	NotAfter      *time.Time
 }
 
 type VolumeStat struct {

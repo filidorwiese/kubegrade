@@ -9,7 +9,6 @@ import (
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/data"
-	"github.com/filidorwiese/kubegrade/internal/state"
 )
 
 type helmStatus struct{}
@@ -17,7 +16,7 @@ type helmStatus struct{}
 func (helmStatus) ID() string       { return "helm-status" }
 func (helmStatus) Category() string { return Workloads }
 
-func (helmStatus) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (helmStatus) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, r := range s.HelmReleases {
 		res := "helm " + r.Namespace + "/" + r.Name
@@ -50,7 +49,7 @@ type imageTags struct{}
 func (imageTags) ID() string       { return "image-tag-latest" }
 func (imageTags) Category() string { return Workloads }
 
-func (imageTags) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	noDigest := 0
 	for _, d := range s.Deployments {
@@ -118,7 +117,7 @@ func (chartOutdated) ID() string       { return "chart-outdated" }
 func (chartOutdated) Category() string { return Workloads }
 
 // chartOutdated only fires in --online mode, when ChartLatest is populated.
-func (chartOutdated) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	if s.ChartLatest == nil {
 		return nil
 	}

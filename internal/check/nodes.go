@@ -9,7 +9,6 @@ import (
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/data"
-	"github.com/filidorwiese/kubegrade/internal/state"
 )
 
 type kubeletSkew struct{}
@@ -17,7 +16,7 @@ type kubeletSkew struct{}
 func (kubeletSkew) ID() string       { return "kubelet-skew" }
 func (kubeletSkew) Category() string { return Nodes }
 
-func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	server := minorInt(minor(s.ServerVersion))
 	var out []Finding
 	for _, n := range s.Nodes {
@@ -42,7 +41,7 @@ type kernelEOL struct{}
 func (kernelEOL) ID() string       { return "kernel-eol" }
 func (kernelEOL) Category() string { return Nodes }
 
-func (kernelEOL) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		kv := n.Status.NodeInfo.KernelVersion
@@ -75,7 +74,7 @@ type osEOL struct{}
 func (osEOL) ID() string       { return "os-eol" }
 func (osEOL) Category() string { return Nodes }
 
-func (osEOL) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		img := n.Status.NodeInfo.OSImage
@@ -101,7 +100,7 @@ type nodeInfo struct{}
 func (nodeInfo) ID() string       { return "node-info" }
 func (nodeInfo) Category() string { return Nodes }
 
-func (nodeInfo) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		ni := n.Status.NodeInfo
@@ -128,7 +127,7 @@ type nodeDrift struct{}
 func (nodeDrift) ID() string       { return "node-drift" }
 func (nodeDrift) Category() string { return Nodes }
 
-func (nodeDrift) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	if len(s.Nodes) < 2 {
 		return nil
 	}
@@ -175,7 +174,7 @@ type nodeNotReady struct{}
 func (nodeNotReady) ID() string       { return "node-notready" }
 func (nodeNotReady) Category() string { return Nodes }
 
-func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
 		for _, c := range n.Status.Conditions {

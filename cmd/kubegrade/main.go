@@ -1,6 +1,6 @@
-// Command kubegrade scans the cluster in your kubeconfig and prints findings
-// plus a letter grade to stdout. Nothing leaves your machine unless --online
-// is set, which fetches public EOL tables and Helm repo indexes.
+// Command kubegrade scans the cluster in your kubeconfig once and prints
+// findings plus a letter grade to stdout. Nothing leaves your machine unless
+// --online is set, which fetches public EOL tables and Helm repo indexes.
 package main
 
 import (
@@ -21,7 +21,6 @@ import (
 	"github.com/filidorwiese/kubegrade/internal/data"
 	"github.com/filidorwiese/kubegrade/internal/grade"
 	"github.com/filidorwiese/kubegrade/internal/report"
-	"github.com/filidorwiese/kubegrade/internal/state"
 )
 
 // version is set with -ldflags "-X main.version=..."
@@ -29,8 +28,6 @@ var version = "dev"
 
 type options struct {
 	kubeconfig  string
-	interval    time.Duration
-	once        bool
 	format      string
 	clusterName string
 	online      bool
@@ -39,8 +36,6 @@ type options struct {
 func main() {
 	var o options
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "path to kubeconfig; defaults to $KUBECONFIG or ~/.kube/config")
-	flag.DurationVar(&o.interval, "interval", 15*time.Minute, "time between scans")
-	flag.BoolVar(&o.once, "once", false, "run a single scan and exit")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
 	flag.BoolVar(&o.online, "online", false, "fetch EOL tables from endoflife.date and Helm repo indexes each scan")
@@ -83,27 +78,10 @@ func run(o options, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	store := state.New()
-
-	for {
-		if err := scan(ctx, o, collector, store, log); err != nil {
-			if o.once {
-				return err
-			}
-			log.Error("scan failed", "err", err)
-		}
-		if o.once {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(o.interval):
-		}
-	}
+	return scan(ctx, o, collector)
 }
 
-func scan(ctx context.Context, o options, c *collect.Collector, st *state.Store, log *slog.Logger) error {
+func scan(ctx context.Context, o options, c *collect.Collector) error {
 	start := time.Now()
 	if o.online {
 		t, err := data.Online(ctx)
@@ -116,7 +94,7 @@ func scan(ctx context.Context, o options, c *collect.Collector, st *state.Store,
 	if err != nil {
 		return err
 	}
-	findings := check.Run(ctx, snap, st)
+	findings := check.Run(ctx, snap)
 	result := grade.Compute(findings)
 
 	r := report.Build(report.Input{

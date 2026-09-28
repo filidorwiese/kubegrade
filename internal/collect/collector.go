@@ -81,9 +81,6 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 
 	c.try(s, "helm releases", func() error { return c.helmReleases(ctx, s) })
 	c.try(s, "chart upstream", func() error { return c.chartUpstream(ctx, s) })
-	c.try(s, "cert-manager", func() error { return c.certManager(ctx, s) })
-	c.try(s, "tls secrets", func() error { return c.tlsSecrets(ctx, s) })
-	c.try(s, "apiserver cert", func() error { return c.apiServerCert(ctx, s) })
 	c.try(s, "kubelet stats", func() error { return c.volumeStats(ctx, s) })
 	c.try(s, "deprecated apis", func() error { return c.deprecatedAPIs(ctx, s) })
 	return s, nil

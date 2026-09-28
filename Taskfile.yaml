@@ -13,7 +13,7 @@ tasks:
   run:
     desc: Single scan against the current kubeconfig context
     cmds:
-      - go run ./cmd/kubegrade --once {{.CLI_ARGS}}
+      - go run ./cmd/kubegrade {{.CLI_ARGS}}
 
   refresh-data:
     desc: Refresh embedded EOL tables from endoflife.date and Pluto

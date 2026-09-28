@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
-	"github.com/filidorwiese/kubegrade/internal/state"
 )
 
 type Severity string
@@ -24,17 +23,15 @@ const (
 	ControlPlane = "control-plane"
 	Workloads    = "workloads"
 	Nodes        = "nodes"
-	Certificates = "certificates"
 	Sustained    = "sustained"
 )
 
-var Categories = []string{ControlPlane, Workloads, Nodes, Certificates, Sustained}
+var Categories = []string{ControlPlane, Workloads, Nodes, Sustained}
 
 var CategoryNames = map[string]string{
 	ControlPlane: "Control plane",
 	Workloads:    "Workloads",
 	Nodes:        "Nodes",
-	Certificates: "Certificates",
 	Sustained:    "Sustained conditions",
 }
 
@@ -54,7 +51,7 @@ type Finding struct {
 type Check interface {
 	ID() string
 	Category() string
-	Run(ctx context.Context, s *collect.Snapshot, st *state.Store) []Finding
+	Run(ctx context.Context, s *collect.Snapshot) []Finding
 }
 
 // All returns every check in report order.
@@ -63,15 +60,14 @@ func All() []Check {
 		k8sVersion{}, k8sDataStale{}, k8sDeprecated{},
 		helmStatus{}, chartOutdated{}, imageTags{},
 		kubeletSkew{}, kernelEOL{}, osEOL{}, nodeDrift{}, nodeInfo{}, nodeNotReady{},
-		apiServerCert{}, tlsSecrets{}, certManager{},
 		crashLoop{}, podPending{}, deployUnavailable{}, pvcUsage{},
 	}
 }
 
-func Run(ctx context.Context, s *collect.Snapshot, st *state.Store) []Finding {
+func Run(ctx context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, c := range All() {
-		out = append(out, c.Run(ctx, s, st)...)
+		out = append(out, c.Run(ctx, s)...)
 	}
 	return out
 }

@@ -9,19 +9,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
-	"github.com/filidorwiese/kubegrade/internal/state"
 )
-
-const sinceStart = " (since agent start)"
 
 type crashLoop struct{}
 
 func (crashLoop) ID() string       { return "pod-crashloop" }
 func (crashLoop) Category() string { return Sustained }
 
-// crashLoop groups crash-looping pods by owner and times them from the
-// in-memory store, because the API gives no reliable start of the loop.
-func (crashLoop) Run(_ context.Context, s *collect.Snapshot, st *state.Store) []Finding {
+// crashLoop groups crash-looping pods by owner. A single run cannot measure
+// how long the loop has lasted, so restart count stands in for duration.
+func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	type group struct {
 		pods, total int
 		restarts    int32
@@ -51,26 +48,16 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot, st *state.Store) []
 		g.restarts += restarts
 	}
 
-	keep := map[string]bool{}
 	var out []Finding
 	for owner, g := range groups {
-		key := "crashloop:" + owner
-		keep[key] = true
-		since := st.FirstSeen(key, s.ScannedAt)
-		dur := s.ScannedAt.Sub(since)
-		sev := Low
-		switch {
-		case dur > 24*time.Hour:
+		sev := Medium
+		if g.restarts >= 20 {
 			sev = High
-		case dur > time.Hour:
-			sev = Medium
 		}
 		out = append(out, Finding{ID: "pod-crashloop", Category: Sustained, Severity: sev, Resource: owner,
-			What: "CrashLoopBackOff " + fmtInt(g.pods) + "/" + fmtInt(owned[owner]) + " pods, " + humanDuration(dur) +
-				sinceStart + ", " + fmtInt(int(g.restarts)) + " restarts",
-			Fix: "kubectl logs -p", Since: &since})
+			What: "CrashLoopBackOff " + fmtInt(g.pods) + "/" + fmtInt(owned[owner]) + " pods, " + fmtInt(int(g.restarts)) + " restarts",
+			Fix:  "kubectl logs -p"})
 	}
-	pruneKeys(st, "crashloop:", keep)
 	sort.Slice(out, func(i, j int) bool { return out[i].Resource < out[j].Resource })
 	return out
 }
@@ -112,7 +99,7 @@ type podPending struct{}
 func (podPending) ID() string       { return "pod-pending" }
 func (podPending) Category() string { return Sustained }
 
-func (podPending) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, p := range s.Pods {
 		if p.Status.Phase != corev1.PodPending {
@@ -135,7 +122,7 @@ type deployUnavailable struct{}
 func (deployUnavailable) ID() string       { return "deploy-unavailable" }
 func (deployUnavailable) Category() string { return Sustained }
 
-func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, d := range s.Deployments {
 		want := int32(1)
@@ -169,38 +156,26 @@ type pvcUsage struct{}
 func (pvcUsage) ID() string       { return "pvc-usage" }
 func (pvcUsage) Category() string { return Sustained }
 
-func (pvcUsage) Run(_ context.Context, s *collect.Snapshot, st *state.Store) []Finding {
-	keep := map[string]bool{}
+func (pvcUsage) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	seen := map[string]bool{}
 	var out []Finding
 	for _, v := range s.VolumeStats {
 		pct := int(v.Used * 100 / v.Capacity)
 		if pct < 90 {
 			continue
 		}
-		key := "pvc:" + v.Namespace + "/" + v.PVC
-		if keep[key] {
+		key := v.Namespace + "/" + v.PVC
+		if seen[key] {
 			continue // same PVC mounted by several pods
 		}
-		keep[key] = true
-		since := st.FirstSeen(key, s.ScannedAt)
-		dur := s.ScannedAt.Sub(since)
-		sev := Low
-		switch {
-		case dur > 7*24*time.Hour:
+		seen[key] = true
+		sev := Medium
+		if pct >= 95 {
 			sev = High
-		case dur > 24*time.Hour:
-			sev = Medium
 		}
 		out = append(out, Finding{ID: "pvc-usage", Category: Sustained, Severity: sev,
-			Resource: "pvc " + v.Namespace + "/" + v.PVC,
-			What:     fmtInt(pct) + "% used for " + humanDuration(dur) + sinceStart,
-			Fix:      "expand the volume or prune data", Since: &since})
+			Resource: "pvc " + key, What: fmtInt(pct) + "% used",
+			Fix: "expand the volume or prune data"})
 	}
-	pruneKeys(st, "pvc:", keep)
 	return out
-}
-
-// pruneKeys forgets store entries under prefix that were not seen this scan.
-func pruneKeys(st *state.Store, prefix string, keep map[string]bool) {
-	st.PrunePrefix(prefix, keep)
 }
