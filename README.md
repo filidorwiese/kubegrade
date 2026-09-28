@@ -4,17 +4,19 @@ Grades a Kubernetes cluster from your kubeconfig. Read-only, one scan per
 run, nothing about the cluster leaves your machine. Version data comes from
 endoflife.date and Artifact Hub.
 
-```sh
-curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o kubegrade && chmod +x kubegrade
-```
-
-Or `go install github.com/filidorwiese/kubegrade/cmd/kubegrade@latest`.
+No install needed:
 
 ```sh
-kubegrade                 # current context
-kubegrade -v              # include info findings
-kubegrade --format json
+go run github.com/filidorwiese/kubegrade/cmd/kubegrade@latest
 ```
+
+Without Go, run the release binary from a temp dir:
+
+```sh
+curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o /tmp/kubegrade && chmod +x /tmp/kubegrade && /tmp/kubegrade
+```
+
+Flags work the same either way, e.g. `go run ... @latest -v --format json`.
 
 Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color`.
 Needs cluster-wide read access, including Helm release secrets.
