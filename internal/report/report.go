@@ -106,12 +106,6 @@ const (
 	cyan   = "\033[36m"
 )
 
-var categoryEmoji = map[string]string{
-	check.UpToDate: "🔄",
-	check.Hygiene:  "🧹",
-	check.Health:   "💚",
-}
-
 var severityStyle = map[string]string{
 	"critical": bold + red,
 	"high":     red,
@@ -161,8 +155,7 @@ func WriteText(w io.Writer, r Report, color bool) error {
 	fmt.Fprint(w, "\n\n")
 
 	for _, c := range r.Categories {
-		// Emoji width varies by terminal, so pad the name, not the emoji.
-		fmt.Fprintf(w, "%s %-12s %s   %s\n", categoryEmoji[c.ID], check.CategoryNames[c.ID],
+		fmt.Fprintf(w, "%-12s %s   %s\n", check.CategoryNames[c.ID],
 			paint(scoreStyle(c.Score), fmt.Sprintf("%3d", c.Score)), c.Summary)
 	}
 
