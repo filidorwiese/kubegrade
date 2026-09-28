@@ -20,8 +20,9 @@ func (crashLoop) Category() string { return Health }
 // how long the loop has lasted, so restart count stands in for duration.
 func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	type group struct {
-		pods, total int
-		restarts    int32
+		pods     int
+		restarts int32
+		reasons  reasonCount
 	}
 	groups := map[string]*group{}
 	owned := map[string]int{}
@@ -30,10 +31,12 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		owned[owner]++
 		looping := false
 		var restarts int32
+		var reasons reasonCount
 		for _, cs := range p.Status.ContainerStatuses {
 			if cs.State.Waiting != nil && cs.State.Waiting.Reason == "CrashLoopBackOff" {
 				looping = true
 				restarts += cs.RestartCount
+				reasons.add(cs)
 			}
 		}
 		if !looping {
@@ -46,6 +49,7 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 		g.pods++
 		g.restarts += restarts
+		g.reasons.merge(reasons)
 	}
 
 	var out []Finding
@@ -54,9 +58,10 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if g.restarts >= 20 {
 			sev = High
 		}
+		reason := g.reasons.top()
 		out = append(out, Finding{ID: "pod-crashloop", Category: Health, Severity: sev, Resource: owner,
-			What: "CrashLoopBackOff " + fmtInt(g.pods) + "/" + fmtInt(owned[owner]) + " pods, " + fmtInt(int(g.restarts)) + " restarts",
-			Fix:  "kubectl logs -p"})
+			What: "CrashLoopBackOff " + fmtInt(g.pods) + "/" + fmtInt(owned[owner]) + " pods, " + fmtInt(int(g.restarts)) + " restarts" + reason.suffix(),
+			Fix:  reason.fix("kubectl logs -p")})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Resource < out[j].Resource })
 	return out
@@ -109,18 +114,21 @@ func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		restarts int32
 		pods     int
 		last     time.Time
+		reasons  reasonCount
 	}
 	groups := map[string]*group{}
 	var order []string
 	for _, p := range s.Pods {
 		var restarts int32
 		var last time.Time
+		var reasons reasonCount
 		looping := false
 		for _, cs := range p.Status.ContainerStatuses {
 			if cs.State.Waiting != nil && cs.State.Waiting.Reason == "CrashLoopBackOff" {
 				looping = true
 			}
 			restarts += cs.RestartCount
+			reasons.add(cs)
 			if t := cs.LastTerminationState.Terminated; t != nil && t.FinishedAt.Time.After(last) {
 				last = t.FinishedAt.Time
 			}
@@ -137,6 +145,7 @@ func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 		g.restarts += restarts
 		g.pods++
+		g.reasons.merge(reasons)
 		if last.After(g.last) {
 			g.last = last
 		}
@@ -156,10 +165,69 @@ func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
 				sev = Medium
 			}
 		}
+		reason := g.reasons.top()
 		out = append(out, Finding{ID: "pod-restarts", Category: Health, Severity: sev, Resource: owner,
-			What: what, Fix: "kubectl logs -p, check probes and limits"})
+			What: what + reason.suffix(), Fix: reason.fix("kubectl logs -p, check probes")})
 	}
 	return out
+}
+
+// reasonCount tallies why containers last terminated. Only the most recent
+// termination per container is known, so this is a sample, not history.
+type reasonCount map[string]int
+
+func (rc *reasonCount) add(cs corev1.ContainerStatus) {
+	t := cs.LastTerminationState.Terminated
+	if t == nil {
+		return
+	}
+	r := t.Reason
+	if r == "" || (r == "Error" && t.ExitCode != 0) {
+		r = "exit " + fmtInt(int(t.ExitCode))
+	}
+	if *rc == nil {
+		*rc = reasonCount{}
+	}
+	(*rc)[r]++
+}
+
+func (rc *reasonCount) merge(o reasonCount) {
+	for r, n := range o {
+		if *rc == nil {
+			*rc = reasonCount{}
+		}
+		(*rc)[r] += n
+	}
+}
+
+func (rc reasonCount) top() termReason {
+	best, n := "", 0
+	for r, c := range rc {
+		if c > n || (c == n && r < best) {
+			best, n = r, c
+		}
+	}
+	return termReason(best)
+}
+
+type termReason string
+
+func (r termReason) suffix() string {
+	if r == "" {
+		return ""
+	}
+	return " (" + string(r) + ")"
+}
+
+// fix prefers a targeted hint for the reasons that have an obvious one.
+func (r termReason) fix(fallback string) string {
+	switch r {
+	case "OOMKilled":
+		return "raise the memory limit or fix the leak"
+	case "exit 137":
+		return "killed (SIGKILL): OOM or probe timeout, check limits"
+	}
+	return fallback
 }
 
 type podPending struct{}

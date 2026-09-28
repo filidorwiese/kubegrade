@@ -37,7 +37,7 @@ Check IDs are stable:
 
 - versions: `k8s-version-eol`, `k8s-version-behind`, `kernel-eol`, `os-eol`, `kubelet-skew`, `chart-outdated`, `chart-unresolved`, `node-info`
 - hygiene: `k8s-api-deprecated`, `image-tag-latest`, `image-no-digest`, `helm-revisions`, `node-drift`
-- health: `helm-status`, `pod-crashloop` (severity by restart count), `pod-restarts` (5+ restarts per workload: low, medium if the last one was within 24h), `pod-pending`, `deploy-unavailable`, `node-notready`, `pvc-usage` (medium at 90%, high at 95%)
+- health: `helm-status`, `pod-crashloop` (severity by restart count), `pod-restarts` (5+ restarts per workload: low, medium if the last one was within 24h; both crash checks show the dominant last-termination reason such as OOMKilled), `pod-pending`, `deploy-unavailable`, `node-notready`, `pvc-usage` (medium at 90%, high at 95%)
 
 ## Layout
 
