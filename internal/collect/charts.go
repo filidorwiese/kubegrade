@@ -16,7 +16,8 @@ import (
 // repoIndex is the part of a Helm repo index.yaml we read.
 type repoIndex struct {
 	Entries map[string][]struct {
-		Version string `json:"version"`
+		Version string   `json:"version"`
+		Sources []string `json:"sources"`
 	} `json:"entries"`
 }
 
@@ -26,7 +27,7 @@ func (c *Collector) chartUpstream(ctx context.Context, s *Snapshot) error {
 	if !c.online {
 		return nil
 	}
-	s.ChartLatest = map[string]string{}
+	s.ChartLatest = map[string]ChartUpstream{}
 	indexes := map[string]*repoIndex{}
 	for _, r := range s.HelmReleases {
 		repo, ok := c.tables.Charts.Repo(r.Chart)
@@ -79,31 +80,36 @@ func fetchIndex(ctx context.Context, repo string) (*repoIndex, error) {
 	return &idx, nil
 }
 
-func newestStable(idx *repoIndex, chart string) (string, bool) {
-	var best data.Version
+func newestStable(idx *repoIndex, chart string) (ChartUpstream, bool) {
+	var best ChartUpstream
+	var bestV data.Version
 	found := false
 	for _, e := range idx.Entries[chart] {
 		v, ok := data.ParseVersion(e.Version)
 		if !ok || v.Prerelease {
 			continue
 		}
-		if !found || best.Less(v) {
-			best, found = v, true
+		if !found || bestV.Less(v) {
+			bestV, found = v, true
+			best = ChartUpstream{Version: v.String()}
+			if len(e.Sources) > 0 {
+				best.Source = e.Sources[0]
+			}
 		}
 	}
-	return best.String(), found
+	return best, found
 }
 
 // NewestUpstream is a convenience for tooling: newest stable version of one
 // chart from one repo.
-func NewestUpstream(ctx context.Context, repo, chart string) (string, error) {
+func NewestUpstream(ctx context.Context, repo, chart string) (ChartUpstream, error) {
 	idx, err := fetchIndex(ctx, repo)
 	if err != nil {
-		return "", err
+		return ChartUpstream{}, err
 	}
 	v, ok := newestStable(idx, chart)
 	if !ok {
-		return "", fmt.Errorf("chart %s not in index", chart)
+		return ChartUpstream{}, fmt.Errorf("chart %s not in index", chart)
 	}
 	return v, nil
 }

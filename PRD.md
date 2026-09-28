@@ -19,7 +19,7 @@ Single Go binary running in-cluster on k3s. Scans on a timer, prints findings an
 | API server cert | dial the host from the loaded rest config |
 | Cluster name | `--cluster-name`, fallback kubeconfig context or `in-cluster` |
 | `--online` | default **off**; manifest passes `--online`. When on: kubernetes, kernel, OS tables fetched from endoflife.date at startup. Fetch failure aborts scan, logs error, retries next interval. `--online=false` uses embedded yaml |
-| Chart upstream | `--online` only: `internal/data/charts.yaml` maps chart name to repo, fetch `index.yaml`, semver compare. Medium if major behind, low per minor (max 3), info for patch. Unmapped chart is info. Repo fetch failure is a collector error, not a scan abort |
+| Chart upstream | `--online` only: `internal/data/charts.yaml` maps chart name to repo, fetch `index.yaml`, semver compare. Medium if major behind (fix points at the chart sources URL for the changelog), low per minor (max 3), info for patch. Unmapped chart is info. Repo fetch failure is a collector error, not a scan abort |
 | Image tag lookups | not built |
 | cert-manager | implemented behind CRD discovery, not present on target cluster |
 
@@ -35,7 +35,7 @@ See handover doc (checks table per category). Check IDs are stable:
 
 - control-plane: `k8s-version-eol`, `k8s-version-behind`, `k8s-data-stale`, `k8s-api-deprecated`
 - workloads: `helm-status`, `helm-revisions`, `chart-outdated`, `chart-unmapped`, `image-tag-latest`, `image-no-digest`
-- nodes: `kubelet-skew`, `kernel-eol`, `os-eol`, `node-info`, `node-notready`
+- nodes: `kubelet-skew`, `kernel-eol`, `os-eol`, `node-drift`, `node-info`, `node-notready`
 - certificates: `apiserver-cert-expiry`, `tls-secret-expiry`, `certmanager-not-ready`, `certmanager-issuing-failed`
 - sustained: `pod-crashloop`, `pod-pending`, `deploy-unavailable`, `pvc-usage`
 

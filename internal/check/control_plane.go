@@ -48,11 +48,15 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []
 		}
 	}
 
+	// One minor behind is the normal place to be; points start at two.
 	behind := minorInt(tbl.Latest) - minorInt(cur)
 	if behind > 0 {
-		out = append(out, Finding{ID: "k8s-version-behind", Category: ControlPlane, Severity: Low,
-			Resource: "kubernetes " + cur, Count: min(behind, 3),
-			What: plural(behind, "minor") + " behind latest known (" + tbl.Latest + ")"})
+		f := Finding{ID: "k8s-version-behind", Category: ControlPlane, Severity: Info,
+			Resource: "kubernetes " + cur, What: plural(behind, "minor") + " behind latest known (" + tbl.Latest + ")"}
+		if behind > 1 {
+			f.Severity, f.Count = Low, min(behind-1, 3)
+		}
+		out = append(out, f)
 	}
 	return out
 }

@@ -121,6 +121,55 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Fi
 	return out
 }
 
+// nodeDrift flags nodes whose kernel, OS, kubelet or runtime differs from
+// the majority. Skipped on single-node clusters.
+type nodeDrift struct{}
+
+func (nodeDrift) ID() string       { return "node-drift" }
+func (nodeDrift) Category() string { return Nodes }
+
+func (nodeDrift) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+	if len(s.Nodes) < 2 {
+		return nil
+	}
+	fields := []struct {
+		label string
+		get   func(corev1.NodeSystemInfo) string
+	}{
+		{"kernel", func(i corev1.NodeSystemInfo) string { return i.KernelVersion }},
+		{"OS", func(i corev1.NodeSystemInfo) string { return i.OSImage }},
+		{"kubelet", func(i corev1.NodeSystemInfo) string { return i.KubeletVersion }},
+		{"runtime", func(i corev1.NodeSystemInfo) string { return i.ContainerRuntimeVersion }},
+	}
+	var out []Finding
+	for _, f := range fields {
+		counts := map[string]int{}
+		for _, n := range s.Nodes {
+			counts[f.get(n.Status.NodeInfo)]++
+		}
+		if len(counts) < 2 {
+			continue
+		}
+		majority, majorityN := "", 0
+		for v, n := range counts {
+			if n > majorityN || (n == majorityN && v > majority) {
+				majority, majorityN = v, n
+			}
+		}
+		for _, n := range s.Nodes {
+			v := f.get(n.Status.NodeInfo)
+			if v == majority {
+				continue
+			}
+			out = append(out, Finding{ID: "node-drift", Category: Nodes, Severity: Low,
+				Resource: "node " + n.Name,
+				What:     f.label + " " + v + " differs from " + plural(majorityN, "node") + " on " + majority,
+				Fix:      "pending reboot or upgrade"})
+		}
+	}
+	return out
+}
+
 type nodeNotReady struct{}
 
 func (nodeNotReady) ID() string       { return "node-notready" }

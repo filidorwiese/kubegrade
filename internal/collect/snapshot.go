@@ -28,9 +28,9 @@ type Snapshot struct {
 	CertManager   CertManager
 	VolumeStats   []VolumeStat
 	Deprecated    []DeprecatedUse
-	// ChartLatest is chart name -> newest stable upstream version; nil when
-	// not running --online.
-	ChartLatest map[string]string
+	// ChartLatest is chart name -> newest stable upstream; nil when not
+	// running --online.
+	ChartLatest map[string]ChartUpstream
 
 	// Tables are the EOL tables used for this scan.
 	Tables *data.Tables
@@ -49,6 +49,13 @@ type HelmRelease struct {
 	Version    string
 	AppVersion string
 	Deployed   time.Time
+}
+
+type ChartUpstream struct {
+	Version string
+	// Source is the first entry of the chart's sources list, usually the
+	// repo holding the changelog.
+	Source string
 }
 
 type TLSSecret struct {

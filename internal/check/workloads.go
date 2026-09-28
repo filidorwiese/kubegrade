@@ -130,27 +130,31 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot, _ *state.Store)
 				Resource: res, What: "chart " + r.Chart + " has no repo mapping", Fix: "add to internal/data/charts.yaml"})
 			continue
 		}
-		latest, ok := s.ChartLatest[r.Chart]
+		up, ok := s.ChartLatest[r.Chart]
 		if !ok {
 			continue
 		}
 		cur, okCur := data.ParseVersion(r.Version)
-		up, okUp := data.ParseVersion(latest)
-		if !okCur || !okUp || !cur.Less(up) {
+		latest, okUp := data.ParseVersion(up.Version)
+		if !okCur || !okUp || !cur.Less(latest) {
 			continue
 		}
-		f := Finding{ID: "chart-outdated", Category: Workloads, Resource: res, Fix: "helm upgrade to " + latest}
+		f := Finding{ID: "chart-outdated", Category: Workloads, Resource: res, Fix: "helm upgrade to " + up.Version}
 		switch {
-		case up.Major > cur.Major:
+		case latest.Major > cur.Major:
 			f.Severity = Medium
-			f.What = "chart " + r.Chart + " " + r.Version + ", major " + latest + " available"
-		case up.Minor > cur.Minor:
+			f.What = "chart " + r.Chart + " " + r.Version + ", major " + up.Version + " available"
+			f.Fix = "major upgrade, read the changelog first"
+			if up.Source != "" {
+				f.Fix += ": " + up.Source
+			}
+		case latest.Minor > cur.Minor:
 			f.Severity = Low
-			f.Count = min(up.Minor-cur.Minor, 3)
-			f.What = "chart " + r.Chart + " " + r.Version + ", " + plural(up.Minor-cur.Minor, "minor") + " behind " + latest
+			f.Count = min(latest.Minor-cur.Minor, 3)
+			f.What = "chart " + r.Chart + " " + r.Version + ", " + plural(latest.Minor-cur.Minor, "minor") + " behind " + up.Version
 		default:
 			f.Severity = Info
-			f.What = "chart " + r.Chart + " " + r.Version + ", patch " + latest + " available"
+			f.What = "chart " + r.Chart + " " + r.Version + ", patch " + up.Version + " available"
 		}
 		out = append(out, f)
 	}
