@@ -30,7 +30,6 @@ type Report struct {
 
 type Category struct {
 	ID      string `json:"id"`
-	Grade   string `json:"grade"`
 	Score   int    `json:"score"`
 	Summary string `json:"summary"`
 }
@@ -62,7 +61,7 @@ func Build(in Input) Report {
 		CappedBy: in.Result.CappedBy, Errors: in.Errors,
 	}
 	for _, c := range in.Result.Categories {
-		r.Categories = append(r.Categories, Category{ID: c.ID, Grade: c.Grade, Score: c.Score, Summary: c.Summary})
+		r.Categories = append(r.Categories, Category{ID: c.ID, Score: c.Score, Summary: c.Summary})
 	}
 	for _, f := range in.Findings {
 		r.Findings = append(r.Findings, Finding{
@@ -99,12 +98,12 @@ func WriteText(w io.Writer, r Report) error {
 		r.Agent, r.Cluster, r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
 	fmt.Fprintf(w, "GRADE  %-3s (%d)", r.Grade, r.Score)
 	if r.CappedBy != "" {
-		fmt.Fprintf(w, "   capped by: %s", capName(r, r.CappedBy))
+		fmt.Fprintf(w, "   capped by: %s", check.CategoryNames[r.CappedBy])
 	}
 	fmt.Fprint(w, "\n\n")
 
 	for _, c := range r.Categories {
-		fmt.Fprintf(w, "%-21s%-4s%3d   %s\n", check.CategoryNames[c.ID], c.Grade, c.Score, c.Summary)
+		fmt.Fprintf(w, "%-21s%3d   %s\n", check.CategoryNames[c.ID], c.Score, c.Summary)
 	}
 
 	fmt.Fprint(w, "\nFINDINGS (ordered by points)\n\n")
@@ -127,13 +126,4 @@ func WriteText(w io.Writer, r Report) error {
 	}
 	fmt.Fprintln(w)
 	return nil
-}
-
-func capName(r Report, id string) string {
-	for _, c := range r.Categories {
-		if c.ID == id {
-			return check.CategoryNames[id] + " (" + c.Grade + ")"
-		}
-	}
-	return id
 }
