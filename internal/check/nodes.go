@@ -93,15 +93,21 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	return out
 }
 
-// nodeInfo is one info line per node with OS, kernel and runtime, so the
-// report always shows what the node runs even when nothing is wrong.
+// nodeInfo prints what the nodes run. Nodes with identical OS, kernel and
+// runtime share one line, so a uniform cluster is one row and any odd one
+// out stands alone next to its node-drift finding.
 type nodeInfo struct{}
 
 func (nodeInfo) ID() string       { return "node-info" }
 func (nodeInfo) Category() string { return UpToDate }
 
 func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
-	var out []Finding
+	type group struct {
+		what  string
+		nodes []string
+	}
+	var order []string
+	groups := map[string]*group{}
 	for _, n := range s.Nodes {
 		ni := n.Status.NodeInfo
 		os := ni.OSImage
@@ -114,8 +120,23 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		} else {
 			kernel += " not LTS"
 		}
-		out = append(out, Finding{ID: "node-info", Category: UpToDate, Severity: Info,
-			Resource: "node " + n.Name, What: os + ", " + kernel + ", " + ni.ContainerRuntimeVersion})
+		what := os + ", " + kernel + ", " + ni.ContainerRuntimeVersion
+		g, ok := groups[what]
+		if !ok {
+			g = &group{what: what}
+			groups[what] = g
+			order = append(order, what)
+		}
+		g.nodes = append(g.nodes, n.Name)
+	}
+	var out []Finding
+	for _, what := range order {
+		g := groups[what]
+		res := "node " + g.nodes[0]
+		if len(g.nodes) > 1 {
+			res = fmtInt(len(g.nodes)) + " nodes"
+		}
+		out = append(out, Finding{ID: "node-info", Category: UpToDate, Severity: Info, Resource: res, What: what})
 	}
 	return out
 }
