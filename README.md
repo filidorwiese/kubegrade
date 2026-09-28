@@ -23,27 +23,27 @@ Flags: `--kubeconfig`, `--cluster-name`, `--format text|json`, `-v`, `--no-color
 Needs cluster-wide read access, including Helm release secrets.
 
 ```
-GRADE  B   (84)   capped by: Hygiene
+GRADE  B   capped by: Hygiene
 
-VERSIONS  89
+VERSIONS  A
   medium  helm traefik/traefik    major 41.6.0 available, have 40.3.0  major upgrade, read the changelog first
   low     helm kube-system/kured  1 minor behind 6.1.0, have 6.0.0     helm upgrade to 6.1.0
   2 info hidden, -v to show
 
-HYGIENE  81
+HYGIENE  B
   medium  deploy shop/checkout    image checkout-api:latest            pin a version tag
   low     node worker2            kernel 6.12.63 differs from 4 nodes on 6.12.107  pending reboot or upgrade
 
-HEALTH  83
+HEALTH  B
   medium  deploy shop/plausible   CrashLoopBackOff 1/1 pods, 5 restarts (exit 1)  kubectl logs -p
 
-LINKS
+EXTERNAL LINKS
   helm traefik/traefik: https://github.com/traefik/traefik-helm-chart
 ```
 
-Three categories, 100 points each. Findings deduct low 3, medium 8, high 15,
-critical 30. Overall is the average, never better than the worst category.
-A+ 95, A 85, B 70, C 55, D 40, else F.
+Each category starts at 100 and loses low 3, medium 8, high 15, critical 30
+per finding. A+ 95, A 85, B 70, C 55, D 40, else F. The overall grade is the
+average, never better than the worst category. Scores are in the JSON output.
 
 - **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift.

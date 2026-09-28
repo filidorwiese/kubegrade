@@ -32,6 +32,7 @@ type Report struct {
 
 type Category struct {
 	ID      string `json:"id"`
+	Grade   string `json:"grade"`
 	Score   int    `json:"score"`
 	Summary string `json:"summary"`
 }
@@ -64,7 +65,7 @@ func Build(in Input) Report {
 		CappedBy: in.Result.CappedBy, Errors: in.Errors,
 	}
 	for _, c := range in.Result.Categories {
-		r.Categories = append(r.Categories, Category{ID: c.ID, Score: c.Score, Summary: c.Summary})
+		r.Categories = append(r.Categories, Category{ID: c.ID, Grade: c.Grade, Score: c.Score, Summary: c.Summary})
 	}
 	for _, f := range in.Findings {
 		r.Findings = append(r.Findings, Finding{
@@ -134,7 +135,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 
 	fmt.Fprintf(w, "%s  scanned: %s  duration: %.1fs\n\n",
 		paint(bold, "kubegrade v"+r.Agent), r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
-	fmt.Fprintf(w, "GRADE  %s (%d)", paint(gradeStyle(r.Grade), fmt.Sprintf("%-3s", r.Grade)), r.Score)
+	fmt.Fprintf(w, "GRADE  %s", paint(gradeStyle(r.Grade), r.Grade))
 	if r.CappedBy != "" {
 		fmt.Fprintf(w, "   capped by: %s", check.CategoryNames[r.CappedBy])
 	}
@@ -142,7 +143,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 
 	var links []Finding
 	for _, c := range r.Categories {
-		fmt.Fprintf(w, "\n%s  %s\n", paint(bold, strings.ToUpper(check.CategoryNames[c.ID])), paint(scoreStyle(c.Score), fmt.Sprint(c.Score)))
+		fmt.Fprintf(w, "\n%s  %s\n", paint(bold, strings.ToUpper(check.CategoryNames[c.ID])), paint(gradeStyle(c.Grade), c.Grade))
 		var rows []Finding
 		hidden := 0
 		for _, f := range r.Findings {
@@ -182,7 +183,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	}
 
 	if len(links) > 0 {
-		fmt.Fprint(w, "\n"+paint(bold, "LINKS")+"\n")
+		fmt.Fprint(w, "\n"+paint(bold, "EXTERNAL LINKS")+"\n")
 		for _, f := range links {
 			fmt.Fprintf(w, "  %s: %s\n", f.Resource, f.Link)
 		}
@@ -242,13 +243,3 @@ func gradeStyle(letter string) string {
 	}
 }
 
-func scoreStyle(score int) string {
-	switch {
-	case score >= 85:
-		return green
-	case score >= 70:
-		return yellow
-	default:
-		return red
-	}
-}
