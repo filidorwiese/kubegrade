@@ -23,7 +23,10 @@ type Snapshot struct {
 
 	HelmReleases []HelmRelease
 	VolumeStats  []VolumeStat
-	Deprecated   []DeprecatedUse
+	// NodeStart is the kubelet start time per node from stats/summary; on
+	// k3s that is effectively the boot time.
+	NodeStart  map[string]time.Time
+	Deprecated []DeprecatedUse
 	// ChartLatest is chart name -> newest stable upstream version.
 	ChartLatest map[string]ChartUpstream
 

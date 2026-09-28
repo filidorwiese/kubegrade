@@ -125,6 +125,10 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 		g.nodes = append(g.nodes, n.Name)
 	}
+	majority := 0
+	for _, g := range groups {
+		majority = max(majority, len(g.nodes))
+	}
 	var out []Finding
 	for _, what := range order {
 		g := groups[what]
@@ -132,9 +136,45 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if len(g.nodes) > 1 {
 			res = fmtInt(len(g.nodes)) + " nodes"
 		}
+		if up := uptime(s, g.nodes); up != "" {
+			what += ", up " + up
+		}
+		// Odd ones out say so first, before clipping can hide the difference.
+		if len(groups) > 1 && len(g.nodes) < majority {
+			what = "differs from " + plural(majority, "node") + ": " + what
+		}
 		out = append(out, Finding{ID: "node-info", Category: Versions, Severity: Info, Resource: res, What: what})
 	}
 	return out
+}
+
+// uptime renders the node uptime, as a range when the group spans several
+// nodes. Empty when the kubelet stats gave no start time.
+func uptime(s *collect.Snapshot, nodes []string) string {
+	var lo, hi time.Duration
+	found := false
+	for _, n := range nodes {
+		t, ok := s.NodeStart[n]
+		if !ok {
+			continue
+		}
+		d := s.ScannedAt.Sub(t)
+		if !found || d < lo {
+			lo = d
+		}
+		if !found || d > hi {
+			hi = d
+		}
+		found = true
+	}
+	switch {
+	case !found:
+		return ""
+	case humanDuration(lo) == humanDuration(hi):
+		return humanDuration(lo)
+	default:
+		return humanDuration(lo) + " to " + humanDuration(hi)
+	}
 }
 
 // nodeDrift flags nodes whose kernel, OS, kubelet or runtime differs from
