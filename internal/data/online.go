@@ -48,7 +48,7 @@ func Online(ctx context.Context) (*Tables, error) {
 		return nil, err
 	}
 	today := time.Now().UTC().Format(DateLayout)
-	t := &Tables{Deprecations: emb.Deprecations, Source: "endoflife.date"}
+	t := &Tables{Deprecations: emb.Deprecations, Charts: emb.Charts, Source: "endoflife.date"}
 
 	k8s, err := fetch(ctx, "kubernetes")
 	if err != nil {

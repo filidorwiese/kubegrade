@@ -23,6 +23,10 @@ task logs
 Flags: `--interval` (15m), `--once`, `--format text|json`, `--cluster-name`,
 `--online` (off by default; the manifest turns it on), `--kubeconfig`.
 
+`--online` also compares each Helm release against its repo's `index.yaml`.
+Releases don't record their repo, so `internal/data/charts.yaml` maps chart
+names to repo URLs. Add your charts there; unmapped ones show as info.
+
 ## Grading
 
 Five categories of 100 points. Findings deduct info 0, low 3, medium 8,
@@ -61,5 +65,6 @@ payload in memory and never logs secret contents.
   annotation; objects written by clients that set neither are invisible.
 - Reboot-required, pending OS updates and node-local disk pressure need a
   DaemonSet with host access. Out of scope.
-- No CVE data, no chart-behind-upstream, no image tag lookups.
+- No CVE data, no image tag lookups. Chart upstream checks need a manual
+  entry in `charts.yaml` per chart.
 - Flatcar is matched but has no EOL data on endoflife.date.

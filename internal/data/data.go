@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-//go:embed kubernetes.yaml kernel.yaml os.yaml k8s-deprecations.yaml
+//go:embed kubernetes.yaml kernel.yaml os.yaml k8s-deprecations.yaml charts.yaml
 var files embed.FS
 
 const DateLayout = "2006-01-02"
@@ -65,11 +65,33 @@ type Deprecation struct {
 	Component      string `json:"component"`
 }
 
+// Charts maps chart names to their Helm repo, needed because a release
+// secret does not record where the chart came from.
+type Charts struct {
+	Generated string  `json:"generated"`
+	Charts    []Chart `json:"charts"`
+}
+
+type Chart struct {
+	Name string `json:"name"`
+	Repo string `json:"repo"`
+}
+
+func (c Charts) Repo(name string) (string, bool) {
+	for _, ch := range c.Charts {
+		if ch.Name == name {
+			return ch.Repo, true
+		}
+	}
+	return "", false
+}
+
 type Tables struct {
 	Kubernetes   Kubernetes
 	Kernel       Kernel
 	OS           OS
 	Deprecations Deprecations
+	Charts       Charts
 	// Source is "embedded" or "endoflife.date", shown in the report.
 	Source string
 }
@@ -81,6 +103,7 @@ func Embedded() (*Tables, error) {
 		"kernel.yaml":           &t.Kernel,
 		"os.yaml":               &t.OS,
 		"k8s-deprecations.yaml": &t.Deprecations,
+		"charts.yaml":           &t.Charts,
 	} {
 		b, err := files.ReadFile(name)
 		if err != nil {

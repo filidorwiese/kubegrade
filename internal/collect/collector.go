@@ -19,10 +19,11 @@ type Collector struct {
 	dyn    dynamic.Interface
 	cfg    *rest.Config
 	tables *data.Tables
+	online bool
 	log    *slog.Logger
 }
 
-func New(cfg *rest.Config, tables *data.Tables, log *slog.Logger) (*Collector, error) {
+func New(cfg *rest.Config, tables *data.Tables, online bool, log *slog.Logger) (*Collector, error) {
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -31,7 +32,7 @@ func New(cfg *rest.Config, tables *data.Tables, log *slog.Logger) (*Collector, e
 	if err != nil {
 		return nil, err
 	}
-	return &Collector{cs: cs, dyn: dyn, cfg: cfg, tables: tables, log: log}, nil
+	return &Collector{cs: cs, dyn: dyn, cfg: cfg, tables: tables, online: online, log: log}, nil
 }
 
 func (c *Collector) SetTables(t *data.Tables) { c.tables = t }
@@ -79,6 +80,7 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	s.PVCs = pvcs.Items
 
 	c.try(s, "helm releases", func() error { return c.helmReleases(ctx, s) })
+	c.try(s, "chart upstream", func() error { return c.chartUpstream(ctx, s) })
 	c.try(s, "cert-manager", func() error { return c.certManager(ctx, s) })
 	c.try(s, "tls secrets", func() error { return c.tlsSecrets(ctx, s) })
 	c.try(s, "apiserver cert", func() error { return c.apiServerCert(ctx, s) })

@@ -44,7 +44,7 @@ func main() {
 	flag.BoolVar(&o.once, "once", false, "run a single scan and exit")
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.clusterName, "cluster-name", "", "cluster name in the report")
-	flag.BoolVar(&o.online, "online", false, "fetch EOL tables from endoflife.date each scan")
+	flag.BoolVar(&o.online, "online", false, "fetch EOL tables from endoflife.date and Helm repo indexes each scan")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -80,7 +80,7 @@ func run(o options, log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("embedded data: %w", err)
 	}
-	collector, err := collect.New(cfg, tables, log)
+	collector, err := collect.New(cfg, tables, o.online, log)
 	if err != nil {
 		return err
 	}

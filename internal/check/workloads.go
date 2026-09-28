@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
+	"github.com/filidorwiese/kubegrade/internal/data"
 	"github.com/filidorwiese/kubegrade/internal/state"
 )
 
@@ -109,4 +110,49 @@ func parseImage(img string) imageRef {
 		ref.tag = img[colon+1:]
 	}
 	return ref
+}
+
+type chartOutdated struct{}
+
+func (chartOutdated) ID() string       { return "chart-outdated" }
+func (chartOutdated) Category() string { return Workloads }
+
+// chartOutdated only fires in --online mode, when ChartLatest is populated.
+func (chartOutdated) Run(_ context.Context, s *collect.Snapshot, _ *state.Store) []Finding {
+	if s.ChartLatest == nil {
+		return nil
+	}
+	var out []Finding
+	for _, r := range s.HelmReleases {
+		res := "helm " + r.Namespace + "/" + r.Name
+		if _, mapped := s.Tables.Charts.Repo(r.Chart); !mapped {
+			out = append(out, Finding{ID: "chart-unmapped", Category: Workloads, Severity: Info,
+				Resource: res, What: "chart " + r.Chart + " has no repo mapping", Fix: "add to internal/data/charts.yaml"})
+			continue
+		}
+		latest, ok := s.ChartLatest[r.Chart]
+		if !ok {
+			continue
+		}
+		cur, okCur := data.ParseVersion(r.Version)
+		up, okUp := data.ParseVersion(latest)
+		if !okCur || !okUp || !cur.Less(up) {
+			continue
+		}
+		f := Finding{ID: "chart-outdated", Category: Workloads, Resource: res, Fix: "helm upgrade to " + latest}
+		switch {
+		case up.Major > cur.Major:
+			f.Severity = Medium
+			f.What = "chart " + r.Chart + " " + r.Version + ", major " + latest + " available"
+		case up.Minor > cur.Minor:
+			f.Severity = Low
+			f.Count = min(up.Minor-cur.Minor, 3)
+			f.What = "chart " + r.Chart + " " + r.Version + ", " + plural(up.Minor-cur.Minor, "minor") + " behind " + latest
+		default:
+			f.Severity = Info
+			f.What = "chart " + r.Chart + " " + r.Version + ", patch " + latest + " available"
+		}
+		out = append(out, f)
+	}
+	return out
 }

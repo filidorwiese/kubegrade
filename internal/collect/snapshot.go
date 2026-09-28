@@ -28,6 +28,9 @@ type Snapshot struct {
 	CertManager   CertManager
 	VolumeStats   []VolumeStat
 	Deprecated    []DeprecatedUse
+	// ChartLatest is chart name -> newest stable upstream version; nil when
+	// not running --online.
+	ChartLatest map[string]string
 
 	// Tables are the EOL tables used for this scan.
 	Tables *data.Tables
