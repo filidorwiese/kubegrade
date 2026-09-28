@@ -37,9 +37,13 @@ that fetch fails the run exits with an error. Pluto's `versions.yaml`
 (Apache-2.0, vendored unchanged apart from a header) is embedded;
 `task refresh-data` re-vendors it.
 
-Each Helm release is compared against its repo's `index.yaml`. Releases
-don't record their repo, so `internal/data/charts.yaml` maps chart names to
-repo URLs. Add your charts there; unmapped ones show as info.
+Each Helm release is compared against its upstream chart version. Releases
+don't record their repo, so charts are looked up on Artifact Hub by name.
+When several packages share a name, the release's `home` and `sources` from
+Chart.yaml pick the right one; failing that the official package, then the
+best-ranked one is used and the finding says it was guessed.
+`internal/data/charts.yaml` overrides the lookup for private repos or wrong
+guesses. Charts not found anywhere show as info.
 
 ## Permissions
 
@@ -63,6 +67,5 @@ contents.
   annotation; objects written by clients that set neither are invisible.
 - Reboot-required, pending OS updates and node-local disk pressure need
   host access. Out of scope.
-- No CVE data, no image tag lookups. Chart upstream checks need a manual
-  entry in `charts.yaml` per chart.
+- No CVE data, no image tag lookups. OCI-hosted charts are not resolved.
 - Flatcar is matched but has no EOL data on endoflife.date.

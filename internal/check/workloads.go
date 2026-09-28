@@ -120,13 +120,10 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, r := range s.HelmReleases {
 		res := "helm " + r.Namespace + "/" + r.Name
-		if _, mapped := s.Tables.Charts.Repo(r.Chart); !mapped {
-			out = append(out, Finding{ID: "chart-unmapped", Category: Workloads, Severity: Info,
-				Resource: res, What: "chart " + r.Chart + " has no repo mapping", Fix: "add to internal/data/charts.yaml"})
-			continue
-		}
 		up, ok := s.ChartLatest[r.Chart]
 		if !ok {
+			out = append(out, Finding{ID: "chart-unresolved", Category: Workloads, Severity: Info,
+				Resource: res, What: "chart " + r.Chart + " not found on Artifact Hub", Fix: "map it in internal/data/charts.yaml"})
 			continue
 		}
 		cur, okCur := data.ParseVersion(r.Version)
@@ -150,6 +147,9 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		default:
 			f.Severity = Info
 			f.What = "chart " + r.Chart + " " + r.Version + ", patch " + up.Version + " available"
+		}
+		if up.Guessed {
+			f.Fix += "; upstream guessed as " + up.Repo + ", pin it in charts.yaml if wrong"
 		}
 		out = append(out, f)
 	}

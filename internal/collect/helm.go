@@ -27,9 +27,11 @@ type releaseJSON struct {
 	} `json:"info"`
 	Chart struct {
 		Metadata struct {
-			Name       string `json:"name"`
-			Version    string `json:"version"`
-			AppVersion string `json:"appVersion"`
+			Name       string   `json:"name"`
+			Version    string   `json:"version"`
+			AppVersion string   `json:"appVersion"`
+			Home       string   `json:"home"`
+			Sources    []string `json:"sources"`
 		} `json:"metadata"`
 	} `json:"chart"`
 }
@@ -76,6 +78,8 @@ func (c *Collector) helmReleases(ctx context.Context, s *Snapshot) error {
 			Chart:      rel.Chart.Metadata.Name,
 			Version:    rel.Chart.Metadata.Version,
 			AppVersion: rel.Chart.Metadata.AppVersion,
+			Home:       rel.Chart.Metadata.Home,
+			Sources:    rel.Chart.Metadata.Sources,
 			Deployed:   rel.Info.LastDeployed,
 		})
 	}

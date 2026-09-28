@@ -1,44 +1,8 @@
-# Hand-maintained: Helm releases do not record their source repo.
-# Chart name -> repo URL. Unmapped charts get an info finding.
+# Override for chart -> Helm repo URL. Charts are resolved through Artifact
+# Hub by default; add an entry here for private repos or when Artifact Hub
+# picks the wrong package for an ambiguous name.
 generated: 2026-09-28
-charts:
-  - name: traefik
-    repo: https://traefik.github.io/charts
-  - name: cert-manager
-    repo: https://charts.jetstack.io
-  - name: ingress-nginx
-    repo: https://kubernetes.github.io/ingress-nginx
-  - name: metrics-server
-    repo: https://kubernetes-sigs.github.io/metrics-server
-  - name: kube-prometheus-stack
-    repo: https://prometheus-community.github.io/helm-charts
-  - name: prometheus
-    repo: https://prometheus-community.github.io/helm-charts
-  - name: grafana
-    repo: https://grafana.github.io/helm-charts
-  - name: loki
-    repo: https://grafana.github.io/helm-charts
-  - name: promtail
-    repo: https://grafana.github.io/helm-charts
-  - name: argo-cd
-    repo: https://argoproj.github.io/argo-helm
-  - name: argocd-image-updater
-    repo: https://argoproj.github.io/argo-helm
-  - name: kured
-    repo: https://kubereboot.github.io/charts
-  - name: longhorn
-    repo: https://charts.longhorn.io
-  - name: cilium
-    repo: https://helm.cilium.io
-  - name: external-dns
-    repo: https://kubernetes-sigs.github.io/external-dns
-  - name: sealed-secrets
-    repo: https://bitnami-labs.github.io/sealed-secrets
-  - name: external-secrets
-    repo: https://charts.external-secrets.io
-  - name: kubernetes-dashboard
-    repo: https://kubernetes.github.io/dashboard
-  - name: velero
-    repo: https://vmware-tanzu.github.io/helm-charts
-  - name: nfs-subdir-external-provisioner
-    repo: https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
+charts: []
+# Example:
+#   - name: my-internal-chart
+#     repo: https://charts.example.internal
