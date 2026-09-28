@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/term"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -99,7 +100,16 @@ func run(o options, log *slog.Logger) error {
 	if o.format == "json" {
 		return report.WriteJSON(os.Stdout, rep)
 	}
-	return report.WriteText(os.Stdout, rep, useColor(o))
+	return report.WriteText(os.Stdout, rep, useColor(o), termWidth())
+}
+
+// termWidth is the stdout terminal width, or 0 when stdout is not a tty.
+func termWidth() int {
+	w, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		return 0
+	}
+	return w
 }
 
 // useColor is on for a terminal stdout unless --no-color or NO_COLOR is set.

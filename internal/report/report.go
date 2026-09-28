@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	"github.com/filidorwiese/kubegrade/internal/check"
 	"github.com/filidorwiese/kubegrade/internal/grade"
@@ -114,6 +115,42 @@ var severityStyle = map[string]string{
 	"info":     dim,
 }
 
+// columnWidths fits resource, what and fix into width. Fixed columns are
+// severity (10), points (3) and category (10) plus five 2-space gaps.
+// what and resource give way first; fix is dropped when there's no room.
+func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
+	for _, f := range fs {
+		resW = max(resW, utf8.RuneCountInString(f.Resource))
+		whatW = max(whatW, utf8.RuneCountInString(f.What))
+		fixW = max(fixW, utf8.RuneCountInString(f.Fix))
+	}
+	if width <= 0 {
+		return resW, whatW, fixW
+	}
+	const fixed = 10 + 3 + 10 + 5*2
+	avail := width - fixed
+	resW = min(resW, 40)
+	whatW = min(whatW, 70)
+	for _, step := range []struct{ res, what int }{{40, 70}, {40, 50}, {30, 40}, {24, 32}} {
+		resW, whatW = min(resW, step.res), min(whatW, step.what)
+		if left := avail - resW - whatW; left >= 24 {
+			return resW, whatW, min(fixW, left)
+		}
+	}
+	return resW, whatW, 0
+}
+
+func clip(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	return string(r[:n-1]) + "…"
+}
+
 func gradeStyle(letter string) string {
 	switch letter {
 	case "A+", "A":
@@ -138,7 +175,9 @@ func scoreStyle(score int) string {
 	}
 }
 
-func WriteText(w io.Writer, r Report, color bool) error {
+// WriteText renders the report. width is the terminal width in columns, or
+// 0 when unknown, in which case nothing is clipped.
+func WriteText(w io.Writer, r Report, color bool, width int) error {
 	paint := func(style, s string) string {
 		if !color || style == "" {
 			return s
@@ -161,6 +200,7 @@ func WriteText(w io.Writer, r Report, color bool) error {
 
 	fmt.Fprint(w, "\n"+paint(bold, "FINDINGS")+" (ordered by points)\n\n")
 	// Align first, colour after: escape codes would confuse tabwriter.
+	resW, whatW, fixW := columnWidths(r.Findings, width)
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 	for _, f := range r.Findings {
@@ -168,7 +208,8 @@ func WriteText(w io.Writer, r Report, color bool) error {
 		if f.Points > 0 {
 			pts = fmt.Sprintf("-%d", f.Points)
 		}
-		fmt.Fprintf(tw, "[%s]\t%s\t%s\t%s\t%s\t%s\n", f.Severity, f.Category, f.Resource, f.What, f.Fix, pts)
+		fmt.Fprintf(tw, "[%s]\t%s\t%s\t%s\t%s\t%s\n", f.Severity, pts, f.Category,
+			clip(f.Resource, resW), clip(f.What, whatW), clip(f.Fix, fixW))
 	}
 	if err := tw.Flush(); err != nil {
 		return err
