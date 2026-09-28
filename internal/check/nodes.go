@@ -200,7 +200,7 @@ func (nodeNotReady) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			}
 			out = append(out, Finding{ID: "node-notready", Category: Health, Severity: sev,
 				Resource: "node " + n.Name, What: "NotReady for " + humanDuration(dur) + " (" + strings.TrimSpace(c.Reason) + ")",
-				Fix: "kubectl describe node", Since: &since})
+				Fix: "check node", Since: &since})
 		}
 	}
 	return out

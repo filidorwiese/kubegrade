@@ -58,7 +58,7 @@ func (crashLoop) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		reason := g.reasons.top()
 		out = append(out, Finding{ID: "pod-crashloop", Category: Health, Severity: sev, Resource: owner,
 			What: "CrashLoopBackOff " + fmtInt(g.pods) + "/" + fmtInt(owned[owner]) + " pods, " + fmtInt(int(g.restarts)) + " restarts" + reason.suffix(),
-			Fix:  reason.fix("kubectl logs -p")})
+			Fix:  reason.fix("check pod logs")})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Resource < out[j].Resource })
 	return out
@@ -168,7 +168,7 @@ func (podRestarts) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			continue
 		}
 		out = append(out, Finding{ID: "pod-restarts", Category: Health, Severity: sev, Resource: owner,
-			What: what + reason.suffix(), Fix: reason.fix("kubectl logs -p, check probes")})
+			What: what + reason.suffix(), Fix: reason.fix("check pod logs and probes")})
 	}
 	return out
 }
@@ -246,7 +246,7 @@ func (podPending) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 		out = append(out, Finding{ID: "pod-pending", Category: Health, Severity: Medium,
 			Resource: "pod " + p.Namespace + "/" + p.Name, What: "Pending for " + humanDuration(dur),
-			Fix: "kubectl describe pod", Since: &since})
+			Fix: "check scheduling and resources", Since: &since})
 	}
 	return out
 }
@@ -289,7 +289,7 @@ func (deployUnavailable) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		out = append(out, Finding{ID: "deploy-unavailable", Category: Health, Severity: sev,
 			Resource: "deploy " + d.Namespace + "/" + d.Name,
 			What:     fmtInt(int(d.Status.AvailableReplicas)) + "/" + fmtInt(int(want)) + " available for " + humanDuration(dur),
-			Fix:      "kubectl rollout status", Since: &since})
+			Fix:      "check rollout", Since: &since})
 	}
 	return out
 }

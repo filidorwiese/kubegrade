@@ -36,7 +36,7 @@ Needs cluster-wide read access, including Helm release secrets.
 ├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
 │ hygiene  │ medium   │ deploy shop/checkout   │ image checkout-api:latest            │ pin a version tag           │
 ├──────────┼──────────┼────────────────────────┼──────────────────────────────────────┼─────────────────────────────┤
-│ health   │ medium   │ deploy shop/plausible  │ CrashLoopBackOff 1/1 pods (exit 1)   │ kubectl logs -p             │
+│ health   │ medium   │ deploy shop/plausible  │ CrashLoopBackOff 1/1 pods (exit 1)   │ check pod logs              │
 └──────────┴──────────┴────────────────────────┴──────────────────────────────────────┴─────────────────────────────┘
   3 info hidden, -v to show
 
