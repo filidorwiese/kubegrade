@@ -9,9 +9,8 @@ cluster leaves your machine; version data comes from
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, cordoned nodes, leftover pods, unmounted volumes, expired unused TLS secrets.
 - **Health**: crash loops, frequent restarts, image pull failures, pending pods, unavailable deployments, failed releases, NotReady nodes, node pressure, full disks and volumes, expiring certificates.
 
-Each category starts at 100 and loses low 3, medium 8, high 15, critical 30
-per finding. A+ 95, A 85, B 70, C 55, D 40, else F. The overall grade is the
-average, never better than the worst category.
+Every finding deducts points by severity. The overall grade is capped by the
+weakest category.
 
 ![example report](kubegrade-example-report.png)
 
@@ -21,12 +20,13 @@ average, never better than the worst category.
 curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o kubegrade && chmod +x kubegrade
 ```
 
-Needs cluster-wide read access, including Helm and TLS secrets.
+Read-only access to the whole cluster, including Helm and TLS secrets, lets
+every check run. Missing permissions skip a check and are listed in the report.
 
 ## Usage
 
 ```sh
-kubegrade                 # scan the current context
+kubegrade                 # scan the current context of $KUBECONFIG or ~/.kube/config
 kubegrade -v              # include info findings
 kubegrade -vv             # also list checks that passed
 kubegrade --format json
@@ -35,4 +35,3 @@ kubegrade version
 ```
 
 Flags: `--context`, `--format text|json`, `-v`, `-vv`, `--no-color`.
-Reads `$KUBECONFIG` or `~/.kube/config`.
