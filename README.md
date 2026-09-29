@@ -19,8 +19,11 @@ Note: nothing about the cluster leaves your machine; version data comes from
 ## Install
 
 ```sh
-curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o kubegrade && chmod +x kubegrade
+curl -fsSL https://raw.githubusercontent.com/filidorwiese/kubegrade/main/install.sh | sh
 ```
+
+Verifies the checksum and installs to /usr/local/bin, or ~/.local/bin when
+that is not writable. Rerun it to update.
 
 Reads $KUBECONFIG or ~/.kube/config. Needs cluster-wide read access.
 Missing permissions skip a check and are listed in the report.
@@ -32,7 +35,6 @@ kubegrade                 # scan the current context of $KUBECONFIG or ~/.kube/c
 kubegrade -v              # include info findings
 kubegrade -vv             # also list checks that passed
 kubegrade --format json
-kubegrade update          # replace the binary with the latest release
 kubegrade version
 ```
 
