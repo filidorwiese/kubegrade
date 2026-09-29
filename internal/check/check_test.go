@@ -102,6 +102,37 @@ func TestParseImage(t *testing.T) {
 	}
 }
 
+func TestImageTagsDedupePerImage(t *testing.T) {
+	dep := func(ns, name string, imgs ...string) appsv1.Deployment {
+		d := appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}}
+		for _, img := range imgs {
+			d.Spec.Template.Spec.Containers = append(d.Spec.Template.Spec.Containers, corev1.Container{Image: img})
+		}
+		return d
+	}
+	s := snap()
+	s.Deployments = []appsv1.Deployment{
+		dep("web", "app", "nginx:latest"),
+		dep("web", "api", "nginx:latest", "redis:1.2"),
+		dep("cache", "redis", "redis"),
+	}
+	var latest []Finding
+	for _, f := range run(imageTags{}, s) {
+		if f.ID == "image-tag-latest" {
+			latest = append(latest, f)
+		}
+	}
+	if len(latest) != 2 {
+		t.Fatalf("got %d findings, want 2 (one per image): %+v", len(latest), latest)
+	}
+	if latest[0].Resource != "image nginx:latest" || latest[0].What != "used by deploy web/app, web/api" {
+		t.Errorf("nginx: %q / %q", latest[0].Resource, latest[0].What)
+	}
+	if latest[1].Resource != "image redis" || latest[1].What != "used by deploy cache/redis" {
+		t.Errorf("redis: %q / %q", latest[1].Resource, latest[1].What)
+	}
+}
+
 func TestChartOutdated(t *testing.T) {
 	s := snap()
 	s.HelmReleases = []collect.HelmRelease{

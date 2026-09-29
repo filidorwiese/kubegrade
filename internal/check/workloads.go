@@ -44,13 +44,15 @@ var k3sBundled = map[string]bool{
 type imageTags struct{}
 
 func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
-	var out []Finding
 	noDigest := 0
+	// One finding per unpinned image, not per deployment: the same
+	// nginx:latest in five places is one thing to fix.
+	var order []string
+	users := map[string][]string{}
 	for _, d := range s.Deployments {
 		if d.Namespace == "kube-system" && k3sBundled[d.Name] {
 			continue
 		}
-		var unpinned []string
 		tagOnly := false
 		for _, img := range images(d) {
 			ref := parseImage(img)
@@ -58,17 +60,21 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 				tagOnly = true
 			}
 			if ref.digest == "" && (ref.tag == "" || ref.tag == "latest") {
-				unpinned = append(unpinned, shortImage(img))
+				if _, seen := users[img]; !seen {
+					order = append(order, img)
+				}
+				users[img] = append(users[img], d.Namespace+"/"+d.Name)
 			}
 		}
 		if tagOnly {
 			noDigest++
 		}
-		if len(unpinned) > 0 {
-			out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Low,
-				Resource: "deploy " + d.Namespace + "/" + d.Name,
-				What:     "image " + strings.Join(unpinned, ", "), Fix: "pin a version tag"})
-		}
+	}
+	var out []Finding
+	for _, img := range order {
+		out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Low,
+			Resource: "image " + shortImage(img),
+			What:     "used by deploy " + strings.Join(users[img], ", "), Fix: "pin a version tag"})
 	}
 	if noDigest > 0 {
 		out = append(out, Finding{ID: "image-no-digest", Category: Hygiene, Severity: Info,
