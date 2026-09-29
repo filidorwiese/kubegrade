@@ -166,9 +166,6 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	for _, c := range r.Categories {
 		side = append(side, strings.TrimRight(fmt.Sprintf("%-9s %s  %s", check.CategoryNames[c.ID], paint(gradeStyle(c.Grade), fmt.Sprintf("%-2s", c.Grade)), summarise(r.Findings, c.ID)), " "))
 	}
-	if r.CappedBy != "" {
-		side = append(side, "", paint(dim, "capped by "+check.CategoryNames[r.CappedBy]))
-	}
 	for i := range banner {
 		line := "  " + paint(gradeStyle(r.Grade), banner[i])
 		if i < len(side) {

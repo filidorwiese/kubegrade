@@ -35,3 +35,5 @@ kubegrade version
 ```
 
 Flags: `--context`, `--format text|json`, `-v`, `-vv`, `--no-color`.
+
+Licensed under Apache-2.0.
