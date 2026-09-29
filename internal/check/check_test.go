@@ -230,7 +230,14 @@ func TestCruftSkipsCronJobHistory(t *testing.T) {
 	bare.Status.Phase = corev1.PodRunning
 	sys := pod("kube-system", "static", nil)
 	sys.Status.Phase = corev1.PodRunning
-	s.Pods = []corev1.Pod{cron, manual, evicted, bare, sys}
+	terminating := pod("ns", "web-x", &metav1.OwnerReference{Kind: "ReplicaSet", Name: "web"})
+	terminating.CreationTimestamp, terminating.Status.Phase = old, corev1.PodSucceeded
+	terminating.DeletionTimestamp = &metav1.Time{Time: now}
+	longRun := pod("ns", "once-y", &metav1.OwnerReference{Kind: "Job", Name: "once"})
+	longRun.CreationTimestamp, longRun.Status.Phase = old, corev1.PodSucceeded
+	longRun.Status.ContainerStatuses = []corev1.ContainerStatus{{State: corev1.ContainerState{
+		Terminated: &corev1.ContainerStateTerminated{FinishedAt: metav1.NewTime(now.Add(-time.Hour))}}}}
+	s.Pods = []corev1.Pod{cron, manual, evicted, bare, sys, terminating, longRun}
 
 	got := map[string]string{}
 	for _, f := range run(cruft{}, s) {

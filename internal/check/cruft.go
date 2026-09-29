@@ -28,11 +28,16 @@ func (cruft) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	finished := map[string]int{}
 	bare := map[string]int{}
 	for _, p := range s.Pods {
+		// The kubelet marks a deleting pod Succeeded/Failed once its containers
+		// exit, so a terminating pod looks finished for a moment. Nothing to clean.
+		if p.DeletionTimestamp != nil {
+			continue
+		}
 		done := p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed
 		switch {
 		case p.Status.Reason == "Evicted":
 			evicted[p.Namespace]++
-		case done && !cronOwned(p, cron) && s.ScannedAt.Sub(p.CreationTimestamp.Time) > 7*24*time.Hour:
+		case done && !cronOwned(p, cron) && s.ScannedAt.Sub(finishedAt(p)) > 7*24*time.Hour:
 			finished[p.Namespace]++
 		case !done && len(p.OwnerReferences) == 0 && p.Namespace != "kube-system":
 			bare[p.Namespace]++
@@ -55,6 +60,18 @@ func (cruft) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			Fix: "delete leftovers or manage them with a deployment"})
 	}
 	return out
+}
+
+// finishedAt is when the last container exited; a pod that ran for weeks and
+// just stopped is not stale. Falls back to creation when no status was recorded.
+func finishedAt(p corev1.Pod) time.Time {
+	t := p.CreationTimestamp.Time
+	for _, c := range p.Status.ContainerStatuses {
+		if c.State.Terminated != nil && c.State.Terminated.FinishedAt.After(t) {
+			t = c.State.Terminated.FinishedAt.Time
+		}
+	}
+	return t
 }
 
 func cronOwned(p corev1.Pod, cron map[string]bool) bool {
