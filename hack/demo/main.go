@@ -19,7 +19,7 @@ func main() {
 		{ID: "k8s-version-eol", Category: check.Versions, Severity: check.Medium, Resource: "kubernetes 1.34.4",
 			What: "end of support 2026-10-27 (29 days)", Fix: "upgrade to 1.37", Link: "https://github.com/k3s-io/k3s/releases"},
 		{ID: "chart-outdated", Category: check.Versions, Severity: check.Medium, Resource: "helm traefik/traefik",
-			What: "major 41.6.0 available, have 40.3.0", Fix: "major upgrade to 41.6.0",
+			What: "major 41.6.0 available, have 40.3.0", Fix: "helm upgrade to 41.6.0",
 			Link: "https://github.com/traefik/traefik-helm-chart"},
 		{ID: "chart-outdated", Category: check.Versions, Severity: check.Low, Resource: "helm kube-system/kured",
 			What: "1 minor behind 6.1.0, have 6.0.0", Fix: "helm upgrade to 6.1.0"},

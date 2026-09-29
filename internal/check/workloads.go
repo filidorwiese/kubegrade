@@ -144,7 +144,6 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		case latest.Major > cur.Major:
 			f.Severity = Medium
 			f.What = "major " + up.Version + " available, have " + r.Version
-			f.Fix = "major upgrade to " + up.Version
 		case latest.Minor > cur.Minor:
 			f.Severity = Low
 			f.Count = min(latest.Minor-cur.Minor, 3)
