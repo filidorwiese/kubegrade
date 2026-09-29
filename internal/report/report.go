@@ -206,9 +206,12 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 		cells := func(f Finding) [][]string {
 			c := [][]string{{f.Severity}, {f.Category}, wrap(f.Resource, resW), wrap(f.What, whatW)}
 			if fixW > 0 {
-				fix := wrap(f.Fix, fixW)
+				var fix []string
+				if f.Fix != "" {
+					fix = wrap(f.Fix, fixW)
+				}
 				if f.Link != "" {
-					fix = append(fix, wrap(f.Link, fixW)...)
+					fix = append(fix, wrapURL(f.Link, fixW)...)
 				}
 				c = append(c, fix)
 			} else if f.Fix != "" {
@@ -334,9 +337,12 @@ func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	const fixed = 16 + 8 + 8
 	avail := width - fixed
 	resW = min(resW, 32)
-	// Links sit under the fix text; a cut URL cannot be copied, so the
-	// column grows for them with space the finding column does not need.
-	fixW = max(min(fixW, 28), min(linkW, 48, avail-resW-whatW))
+	// Links sit under the fix text. A cut URL cannot be copied, so links
+	// take width from the finding column down to its floor of 30.
+	fixW = min(fixW, 28)
+	if linkW > fixW {
+		fixW = min(linkW, 56, max(fixW, avail-resW-30))
+	}
 	if rest := avail - resW - fixW; rest >= 30 {
 		return resW, min(whatW, rest), fixW
 	}
@@ -346,6 +352,29 @@ func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 
 // wrap breaks s into lines of at most n runes on spaces; a single word
 // longer than n is cut. n <= 0 means no wrapping.
+// wrapURL breaks a URL after slashes so each line stays a readable path
+// segment; only a segment longer than n is cut.
+func wrapURL(u string, n int) []string {
+	if n <= 0 || utf8.RuneCountInString(u) <= n {
+		return []string{u}
+	}
+	var lines []string
+	line := ""
+	for _, seg := range strings.SplitAfter(u, "/") {
+		if line != "" && utf8.RuneCountInString(line)+utf8.RuneCountInString(seg) > n {
+			lines = append(lines, line)
+			line = ""
+		}
+		line += seg
+	}
+	for utf8.RuneCountInString(line) > n {
+		r := []rune(line)
+		lines = append(lines, string(r[:n]))
+		line = string(r[n:])
+	}
+	return append(lines, line)
+}
+
 func wrap(s string, n int) []string {
 	if n <= 0 || utf8.RuneCountInString(s) <= n {
 		return []string{s}
