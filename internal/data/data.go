@@ -31,9 +31,14 @@ type Kernel struct {
 	Kernels []KernelVersion
 }
 
+// KernelVersion is one upstream series. EOL is empty for non-LTS series;
+// Latest is the newest patch release and LatestDate its release date.
 type KernelVersion struct {
-	Version string
-	EOL     string
+	Version    string
+	LTS        bool
+	EOL        string
+	Latest     string
+	LatestDate string
 }
 
 type OS struct {

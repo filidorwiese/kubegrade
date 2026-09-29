@@ -7,7 +7,7 @@ Grades the upkeep of your Kubernetes cluster from A+ to F.
 Kubegrade CLI-tool scans your Kubernetes cluster for these upkeep issues:
 
 - **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream, deprecated charts.
-- **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, cordoned nodes, leftover pods, unmounted volumes, expired unused TLS secrets.
+- **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, cordoned nodes, skipped reboots, leftover pods, unmounted volumes, expired unused TLS secrets.
 - **Health**: crash loops, frequent restarts, image pull failures, pending pods, unavailable deployments, failed releases, NotReady nodes, node pressure, full disks and volumes, expiring certificates.
 
 Every finding deducts points by severity. The overall grade is capped by the

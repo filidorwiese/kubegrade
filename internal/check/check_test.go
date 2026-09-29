@@ -340,3 +340,48 @@ func TestDeployUnavailableSuppressed(t *testing.T) {
 		t.Errorf("crashLoop: %+v", fs)
 	}
 }
+
+// Uptime alone is a weak signal, so it starts at info; a newer patch
+// release in the running series that the node never loaded makes it low.
+func TestNodeUptime(t *testing.T) {
+	s := snap()
+	s.Tables.Kernel = data.Kernel{Kernels: []data.KernelVersion{
+		{Version: "6.12", LTS: true, Latest: "6.12.110", LatestDate: day(-45)},
+		{Version: "6.8", Latest: "6.8.12", LatestDate: day(-45)},
+		{Version: "6.6", LTS: true, Latest: "6.6.50", LatestDate: day(-5)},
+	}}
+	s.Nodes = []corev1.Node{
+		node("fresh", "6.12.100+deb13-amd64", "Debian"),
+		node("month", "6.12.110+deb13-amd64", "Debian"),
+		node("stale", "6.12.100+deb13-amd64", "Debian"),
+		node("ubuntu", "6.8.0-45-generic", "Ubuntu"),
+		node("recent-release", "6.6.40-talos", "Talos"),
+		node("long", "6.12.110+deb13-amd64", "Debian"),
+		node("unknown", "6.12.100", "x"),
+	}
+	for name, days := range map[string]int{"fresh": 10, "month": 40, "stale": 40, "ubuntu": 40, "recent-release": 40, "long": 130} {
+		s.NodeStart[name] = now.AddDate(0, 0, -days)
+	}
+	got := map[string]Finding{}
+	for _, f := range run(nodeUptime{}, s) {
+		got[f.Resource] = f
+	}
+	want := map[string]struct {
+		sev  Severity
+		what string
+	}{
+		"node month":          {Info, "up 40d without a reboot"},
+		"node stale":          {Low, "up 40d without a reboot, 6.12.110 out since " + day(-45)},
+		"node ubuntu":         {Info, "up 40d without a reboot"},
+		"node recent-release": {Info, "up 40d without a reboot"},
+		"node long":           {Low, "up 130d without a reboot"},
+	}
+	if len(got) != len(want) {
+		t.Errorf("got %d findings, want %d: %v", len(got), len(want), got)
+	}
+	for res, w := range want {
+		if f := got[res]; f.Severity != w.sev || f.What != w.what {
+			t.Errorf("%s: %q %q, want %q %q", res, f.Severity, f.What, w.sev, w.what)
+		}
+	}
+}

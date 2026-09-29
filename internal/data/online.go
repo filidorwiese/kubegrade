@@ -23,6 +23,8 @@ type cycle struct {
 	ReleaseDate string          `json:"releaseDate"`
 	EOL         json.RawMessage `json:"eol"`
 	LTS         json.RawMessage `json:"lts"`
+	Latest      string          `json:"latest"`
+	LatestDate  string          `json:"latestReleaseDate"`
 }
 
 func (c cycle) eolDate() string {
@@ -176,12 +178,17 @@ func buildKubernetes(cycles []cycle) Kubernetes {
 	return k
 }
 
+// buildKernel keeps every series: EOL only exists for LTS ones, but the
+// latest patch release matters for any kernel a node may run.
 func buildKernel(cycles []cycle) Kernel {
 	var k Kernel
 	for _, c := range cycles {
-		if c.isLTS() && c.eolDate() != "" {
-			k.Kernels = append(k.Kernels, KernelVersion{Version: c.Cycle, EOL: c.eolDate()})
+		if c.Cycle == "" {
+			continue
 		}
+		k.Kernels = append(k.Kernels, KernelVersion{
+			Version: c.Cycle, LTS: c.isLTS(), EOL: c.eolDate(), Latest: c.Latest, LatestDate: c.LatestDate,
+		})
 	}
 	return k
 }

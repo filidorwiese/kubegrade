@@ -49,7 +49,7 @@ func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		kv := n.Status.NodeInfo.KernelVersion
 		f := Finding{ID: "kernel-eol", Category: Versions, Resource: "node " + n.Name}
 		k, ok := s.Tables.Kernel.Find(minor(kv))
-		if !ok {
+		if !ok || !k.LTS {
 			continue // non-LTS: reported on the node-info line
 		}
 		eol, ok := data.ParseDate(k.EOL)
@@ -111,7 +111,7 @@ func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			os += " (not in OS table)"
 		}
 		kernel := "kernel " + shortKernel(ni.KernelVersion)
-		if k, ok := s.Tables.Kernel.Find(minor(ni.KernelVersion)); ok {
+		if k, ok := s.Tables.Kernel.Find(minor(ni.KernelVersion)); ok && k.LTS {
 			kernel += " LTS until " + k.EOL
 		} else {
 			kernel += " not LTS"
@@ -358,4 +358,60 @@ func (nodeCordoned) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 	}
 	return out
+}
+
+type nodeUptime struct{}
+
+// nodeUptime flags nodes that skipped reboots. A month of uptime spans a
+// few kernel security releases on every distro; four months is certain.
+// When the running kernel carries the upstream patch level, a newer
+// release in its series that is old enough to be packaged is named.
+func (nodeUptime) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	var out []Finding
+	for _, n := range s.Nodes {
+		start, ok := s.NodeStart[n.Name]
+		if !ok {
+			continue
+		}
+		up := s.ScannedAt.Sub(start)
+		if up <= 30*24*time.Hour {
+			continue
+		}
+		f := Finding{ID: "node-uptime", Category: Hygiene, Severity: Info, Resource: "node " + n.Name,
+			What: "up " + humanDuration(up) + " without a reboot",
+			Fix:  "check for a pending kernel update and reboot if available", Since: &start}
+		if up > 120*24*time.Hour {
+			f.Severity = Low
+		}
+		if newer, date := newerKernel(s, n.Status.NodeInfo.KernelVersion); newer != "" {
+			f.Severity = Low
+			f.What += ", " + newer + " out since " + date
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// newerKernel returns the newest patch release of the running series when
+// it is over 30 days old, so the distro had time to ship it. Frozen-base
+// kernels (Ubuntu 6.8.0-45, RHEL 5.14.0-427) carry no upstream patch level
+// and are skipped; their patch number is always zero.
+func newerKernel(s *collect.Snapshot, kernelVersion string) (version, date string) {
+	running, ok := data.ParseVersion(shortKernel(kernelVersion))
+	if !ok || running.Patch == 0 {
+		return "", ""
+	}
+	k, ok := s.Tables.Kernel.Find(minor(kernelVersion))
+	if !ok {
+		return "", ""
+	}
+	latest, ok := data.ParseVersion(k.Latest)
+	if !ok || !running.Less(latest) {
+		return "", ""
+	}
+	released, ok := data.ParseDate(k.LatestDate)
+	if !ok || s.ScannedAt.Sub(released) < 30*24*time.Hour {
+		return "", ""
+	}
+	return k.Latest, k.LatestDate
 }

@@ -86,6 +86,7 @@ func All() []entry {
 		{"node-disk", Health, "nodes", "disks under 90% used", nodeDisk{}},
 		{"pods-leftover", Hygiene, "pods", "no evicted, stale or controller-less pods", cruft{}},
 		{"node-cordoned", Hygiene, "nodes", "none cordoned", nodeCordoned{}},
+		{"node-uptime", Hygiene, "nodes", "all rebooted within 30d", nodeUptime{}},
 		{"pvc-unused", Hygiene, "volumes", "all bound claims mounted", pvcUnused{}},
 		{"cert-expiry", Health, "certificates", "none expiring within 30d", certExpiry{}},
 	}

@@ -78,7 +78,20 @@ func TestBuiltinTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(buildKernel(linux).Kernels) < 3 {
+	kernel := buildKernel(linux)
+	lts := 0
+	for _, k := range kernel.Kernels {
+		if k.LTS {
+			lts++
+			if k.EOL == "" {
+				t.Errorf("LTS %s without EOL", k.Version)
+			}
+		}
+		if k.Latest == "" || k.LatestDate == "" {
+			t.Errorf("%s: latest release missing", k.Version)
+		}
+	}
+	if lts < 3 {
 		t.Error("expected several LTS kernels")
 	}
 	for _, p := range osProducts {
