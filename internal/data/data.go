@@ -1,6 +1,6 @@
-// Package data holds the lookup tables. EOL data is always fetched from
-// endoflife.date at startup; only the Pluto deprecation table and the chart
-// repo mapping are embedded because they have no live source.
+// Package data holds the lookup tables. EOL data is fetched from
+// endoflife.date at startup with a build-time copy as fallback; the Pluto
+// deprecation table and the chart repo mapping are embedded only.
 package data
 
 import (
@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-//go:embed k8s-deprecations.yaml charts.yaml
+//go:embed k8s-deprecations.yaml charts.yaml eol
 var files embed.FS
 
 const DateLayout = "2006-01-02"

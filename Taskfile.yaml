@@ -16,7 +16,7 @@ tasks:
       - go run ./cmd/kubegrade {{.CLI_ARGS}}
 
   refresh-data:
-    desc: Refresh embedded EOL tables from endoflife.date and Pluto
+    desc: Refresh built-in EOL tables and Pluto deprecations
     cmds:
       - ./hack/refresh-data.sh
 

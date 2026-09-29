@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Refresh built-in EOL tables
+        run: go run ./hack/refresh-data internal/data
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}

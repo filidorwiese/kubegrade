@@ -13,7 +13,7 @@ import (
 	"github.com/filidorwiese/kubegrade/internal/progress"
 )
 
-const eolBase = "https://endoflife.date/api/"
+var eolBase = "https://endoflife.date/api/"
 
 // cycle mirrors the endoflife.date product JSON. eol and lts are either
 // a string date or a bool, hence RawMessage.
@@ -42,48 +42,69 @@ func (c cycle) isLTS() bool {
 	return json.Unmarshal(c.LTS, &s) == nil && s != ""
 }
 
-// Load fetches the EOL tables from endoflife.date on top of the embedded
-// static ones. Any fetch error fails the whole call.
-func Load(ctx context.Context, report progress.Func) (*Tables, error) {
+// staleAfter is how old the built-in tables may be before the fallback
+// note asks for an update; a Kubernetes minor lands about every 4 months.
+const staleAfter = 90 * 24 * time.Hour
+
+// Load builds the EOL tables from endoflife.date, falling back per product
+// to the copy embedded at build time. The note is non-empty when any
+// fallback was used and says how old that copy is.
+func Load(ctx context.Context, report progress.Func) (*Tables, string, error) {
 	t, err := embedded()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	const phase = "fetching EOL tables"
 	total := 2 + len(osProducts)
 	step := 0
 	report(phase, step, total)
 
-	k8s, err := fetch(ctx, "kubernetes")
+	var fallback []string
+	load := func(product string) ([]cycle, error) {
+		cycles, err := fetch(ctx, product)
+		if err != nil {
+			fallback = append(fallback, product)
+			cycles, err = builtin(product)
+		}
+		step++
+		report(phase, step, total)
+		return cycles, err
+	}
+
+	k8s, err := load("kubernetes")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	t.Kubernetes = buildKubernetes(k8s)
-	step++
-	report(phase, step, total)
 
-	linux, err := fetch(ctx, "linux")
+	linux, err := load("linux")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	t.Kernel = buildKernel(linux)
-	step++
-	report(phase, step, total)
 
 	t.OS = OS{}
 	for _, p := range osProducts {
-		cycles, err := fetch(ctx, p.product)
+		cycles, err := load(p.product)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		t.OS.Distros = append(t.OS.Distros, p.build(cycles)...)
-		step++
-		report(phase, step, total)
 	}
 	t.OS.Distros = append(t.OS.Distros, rollingDistros...)
-	return t, nil
+
+	note := ""
+	if len(fallback) > 0 {
+		note = "endoflife.date unreachable for " + strings.Join(fallback, ", ") + ", using built-in tables from " + builtinDate()
+		if d, ok := ParseDate(builtinDate()); ok && time.Since(d) > staleAfter {
+			note += " (stale, update kubegrade)"
+		}
+	}
+	return t, note, nil
 }
 
+// fetch downloads one product and rejects payloads that parse but carry
+// nothing usable, so a silent schema change also falls back.
 func fetch(ctx context.Context, product string) ([]cycle, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -103,9 +124,35 @@ func fetch(ctx context.Context, product string) ([]cycle, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseCycles(product, body)
+}
+
+func builtin(product string) ([]cycle, error) {
+	body, err := files.ReadFile("eol/" + product + ".json")
+	if err != nil {
+		return nil, err
+	}
+	return parseCycles(product, body)
+}
+
+func builtinDate() string {
+	b, _ := files.ReadFile("eol/DATE")
+	return strings.TrimSpace(string(b))
+}
+
+func parseCycles(product string, body []byte) ([]cycle, error) {
 	var cycles []cycle
 	if err := json.Unmarshal(body, &cycles); err != nil {
 		return nil, fmt.Errorf("endoflife.date %s: %w", product, err)
+	}
+	usable := 0
+	for _, c := range cycles {
+		if c.Cycle != "" && c.eolDate() != "" {
+			usable++
+		}
+	}
+	if usable < 3 {
+		return nil, fmt.Errorf("endoflife.date %s: unexpected payload", product)
 	}
 	return cycles, nil
 }

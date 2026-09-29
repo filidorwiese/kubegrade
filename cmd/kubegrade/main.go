@@ -103,9 +103,13 @@ func run(o options, log *slog.Logger) error {
 	defer bar.Done()
 
 	start := time.Now()
-	tables, err := data.Load(ctx, tick)
+	tables, note, err := data.Load(ctx, tick)
 	if err != nil {
 		return fmt.Errorf("load EOL tables: %w", err)
+	}
+	if note != "" {
+		bar.Done()
+		fmt.Fprintln(os.Stderr, note)
 	}
 	collector, err := collect.New(cfg, tables, log, tick)
 	if err != nil {
