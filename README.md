@@ -16,10 +16,11 @@ Or `go install github.com/filidorwiese/kubegrade/cmd/kubegrade@latest`.
 ```sh
 kubegrade                 # current context
 kubegrade -v              # include info findings
+kubegrade -vv             # also list checks that passed
 kubegrade --format json
 ```
 
-Flags: `--context`, `--format text|json`, `-v`, `--no-color`. Reads `$KUBECONFIG` or `~/.kube/config`.
+Flags: `--context`, `--format text|json`, `-v`, `-vv`, `--no-color`. Reads `$KUBECONFIG` or `~/.kube/config`.
 Needs cluster-wide read access, including Helm and TLS secrets.
 
 ![example report](kubegrade-example-report.png)

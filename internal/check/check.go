@@ -12,6 +12,8 @@ import (
 type Severity string
 
 const (
+	// OK marks a check that ran and found nothing; only shown with -vv.
+	OK       Severity = "ok"
 	Info     Severity = "info"
 	Low      Severity = "low"
 	Medium   Severity = "medium"
@@ -53,21 +55,52 @@ type Check interface {
 	Run(ctx context.Context, s *collect.Snapshot) []Finding
 }
 
+// entry pairs a check with the row shown when it finds nothing. An empty
+// what means the check is informational and never "passes".
+type entry struct {
+	id, category, resource, what string
+	check                        Check
+}
+
 // All returns every check in report order.
-func All() []Check {
-	return []Check{
-		k8sVersion{}, k8sDeprecated{},
-		helmStatus{}, chartOutdated{}, imageTags{},
-		kubeletSkew{}, kernelEOL{}, osEOL{}, nodeDrift{}, nodeInfo{}, nodeNotReady{},
-		crashLoop{}, podRestarts{}, imagePull{}, podPending{}, deployUnavailable{}, pvcUsage{},
-		nodePressure{}, nodeDisk{}, cruft{}, nodeCordoned{}, pvcUnused{}, certExpiry{},
+func All() []entry {
+	return []entry{
+		{"k8s-version", Versions, "kubernetes", "supported and current", k8sVersion{}},
+		{"k8s-api-deprecated", Hygiene, "api objects", "no deprecated api versions in use", k8sDeprecated{}},
+		{"helm-status", Health, "helm releases", "all deployed", helmStatus{}},
+		{"chart-outdated", Versions, "helm charts", "all at the latest upstream version", chartOutdated{}},
+		{"image-tags", Hygiene, "deployments", "images pinned by tag", imageTags{}},
+		{"kubelet-skew", Versions, "nodes", "kubelet versions match the api server", kubeletSkew{}},
+		{"kernel-eol", Versions, "nodes", "kernels within support", kernelEOL{}},
+		{"os-eol", Versions, "nodes", "os releases within support", osEOL{}},
+		{"node-drift", Hygiene, "nodes", "kernel, os, kubelet and runtime in sync", nodeDrift{}},
+		{"node-info", Versions, "", "", nodeInfo{}},
+		{"node-notready", Health, "nodes", "all ready", nodeNotReady{}},
+		{"pod-crashloop", Health, "pods", "no crash loops", crashLoop{}},
+		{"pod-restarts", Health, "pods", "no frequent restarts", podRestarts{}},
+		{"image-pull", Health, "pods", "all images pulled", imagePull{}},
+		{"pod-pending", Health, "pods", "none pending over 1h", podPending{}},
+		{"deploy-unavailable", Health, "deployments", "all fully available", deployUnavailable{}},
+		{"pvc-usage", Health, "volumes", "all under 90% used", pvcUsage{}},
+		{"node-pressure", Health, "nodes", "no disk, memory or pid pressure", nodePressure{}},
+		{"node-disk", Health, "nodes", "disks under 90% used", nodeDisk{}},
+		{"pods-leftover", Hygiene, "pods", "no evicted, stale or controller-less pods", cruft{}},
+		{"node-cordoned", Hygiene, "nodes", "none cordoned", nodeCordoned{}},
+		{"pvc-unused", Hygiene, "volumes", "all bound claims mounted", pvcUnused{}},
+		{"cert-expiry", Health, "certificates", "none expiring within 30d", certExpiry{}},
 	}
 }
 
+// Run executes every check. A check that found nothing adds an OK row so
+// the report can show what was covered.
 func Run(ctx context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
-	for _, c := range All() {
-		out = append(out, c.Run(ctx, s)...)
+	for _, e := range All() {
+		fs := e.check.Run(ctx, s)
+		if len(fs) == 0 && e.what != "" {
+			fs = []Finding{{ID: e.id, Category: e.category, Severity: OK, Resource: e.resource, What: e.what}}
+		}
+		out = append(out, fs...)
 	}
 	return out
 }

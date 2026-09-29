@@ -109,7 +109,7 @@ func Compute(findings []check.Finding) Result {
 func summary(findings []check.Finding, category string) string {
 	var fs []check.Finding
 	for _, f := range findings {
-		if f.Category == category && f.Severity != check.Info {
+		if f.Category == category && Points(f) > 0 {
 			fs = append(fs, f)
 		}
 	}

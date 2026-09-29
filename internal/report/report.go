@@ -93,7 +93,7 @@ func Build(in Input) Report {
 	return r
 }
 
-var sevOrder = map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+var sevOrder = map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "ok": 5}
 
 func WriteJSON(w io.Writer, r Report) error {
 	enc := json.NewEncoder(w)
@@ -119,13 +119,15 @@ var severityStyle = map[string]string{
 	"medium":   yellow,
 	"low":      cyan,
 	"info":     dim,
+	"ok":       green,
 }
 
 // TextOptions controls the terminal rendering. Width 0 means no clipping.
 type TextOptions struct {
-	Color   bool
-	Width   int
-	Verbose bool // show info findings
+	Color bool
+	Width int
+	// Verbose 1 shows info findings, 2 also the checks that passed.
+	Verbose int
 }
 
 // Block letters, 5 rows by 6 columns, for the grade banner.
@@ -181,10 +183,14 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 
 	// Findings table.
 	var rows []Finding
-	hidden := 0
+	hiddenInfo, hiddenOK := 0, 0
 	for _, f := range r.Findings {
-		if !opt.Verbose && f.Severity == string(check.Info) {
-			hidden++
+		switch {
+		case f.Severity == string(check.Info) && opt.Verbose < 1:
+			hiddenInfo++
+			continue
+		case f.Severity == string(check.OK) && opt.Verbose < 2:
+			hiddenOK++
 			continue
 		}
 		rows = append(rows, f)
@@ -276,8 +282,11 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	} else {
 		fmt.Fprintln(w, "  🙌 nothing to fix")
 	}
-	if hidden > 0 {
-		fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hidden)))
+	if hiddenInfo > 0 {
+		fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hiddenInfo)))
+	}
+	if hiddenOK > 0 {
+		fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d passed hidden, -vv to show", hiddenOK)))
 	}
 
 	if len(r.Errors) > 0 {
@@ -290,11 +299,11 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	return nil
 }
 
-// summarise counts non-info findings of a category by severity.
+// summarise counts scored findings of a category by severity.
 func summarise(fs []Finding, category string) string {
 	counts := map[string]int{}
 	for _, f := range fs {
-		if f.Category == category && f.Severity != string(check.Info) {
+		if f.Category == category && f.Points > 0 {
 			counts[f.Severity]++
 		}
 	}

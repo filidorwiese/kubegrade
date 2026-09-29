@@ -32,7 +32,7 @@ type options struct {
 	context string
 	format  string
 	noColor bool
-	verbose bool
+	verbose int
 }
 
 func main() {
@@ -40,7 +40,8 @@ func main() {
 	flag.StringVar(&o.format, "format", "text", "output format: text or json")
 	flag.StringVar(&o.context, "context", "", "kubeconfig context; defaults to the current one")
 	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
-	flag.BoolVar(&o.verbose, "v", false, "show info findings")
+	v := flag.Bool("v", false, "show info findings")
+	vv := flag.Bool("vv", false, "also show checks that passed")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "kubegrade grades the upkeep of your Kubernetes cluster from A+ to F.")
@@ -52,6 +53,12 @@ func main() {
 	if *showVersion {
 		fmt.Println(version)
 		return
+	}
+	switch {
+	case *vv:
+		o.verbose = 2
+	case *v:
+		o.verbose = 1
 	}
 	if o.format != "text" && o.format != "json" {
 		fmt.Fprintln(os.Stderr, "--format must be text or json")
