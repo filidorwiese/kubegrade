@@ -16,8 +16,8 @@ import (
 func fakeRelease(t *testing.T, tag, sum string, asset []byte) {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/latest", func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"tag_name":"` + tag + `"}`))
+	mux.HandleFunc("/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/releases/tag/"+tag, http.StatusFound)
 	})
 	mux.HandleFunc("/dl/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "checksums.txt") {
@@ -38,16 +38,20 @@ func platform() string { return runtime.GOOS + "_" + runtime.GOARCH }
 func TestNewerRelease(t *testing.T) {
 	fakeRelease(t, "v0.3.0", "", nil)
 	version = "0.2.0"
-	if got := newerRelease(context.Background()); got != "0.3.0" {
-		t.Errorf("got %q, want 0.3.0", got)
+	if got, err := newerRelease(context.Background()); got != "0.3.0" || err != nil {
+		t.Errorf("got %q, %v; want 0.3.0", got, err)
 	}
 	version = "0.3.0"
-	if got := newerRelease(context.Background()); got != "" {
-		t.Errorf("same version: got %q", got)
+	if got, err := newerRelease(context.Background()); got != "" || err != nil {
+		t.Errorf("same version: got %q, %v", got, err)
 	}
 	version = "dev"
-	if got := newerRelease(context.Background()); got != "" {
-		t.Errorf("dev build: got %q", got)
+	if got, err := newerRelease(context.Background()); got != "" || err == nil {
+		t.Errorf("dev build: got %q, %v", got, err)
+	}
+	releasesURL = strings.Replace(releasesURL, "/latest", "/missing", 1)
+	if _, err := newerRelease(context.Background()); err == nil {
+		t.Error("no redirect must be an error, not silence")
 	}
 }
 

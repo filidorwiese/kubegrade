@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,53 +20,71 @@ import (
 const repo = "filidorwiese/kubegrade"
 
 var (
-	releasesURL  = "https://api.github.com/repos/" + repo + "/releases/latest"
+	releasesURL  = "https://github.com/" + repo + "/releases/latest"
 	downloadBase = "https://github.com/" + repo + "/releases/download/"
 )
 
-// latestRelease returns the newest release tag, e.g. "v0.3.0".
+// latestRelease returns the newest release tag, e.g. "v0.3.0", read from
+// the redirect of the releases page. Unlike the REST API this has no
+// per-IP rate limit, which silently broke the hint behind shared NAT.
 func latestRelease(ctx context.Context) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, releasesURL, nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
+	client := http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("github: %s", resp.Status)
+	resp.Body.Close()
+	loc := resp.Header.Get("Location")
+	i := strings.LastIndex(loc, "/tag/")
+	if resp.StatusCode/100 != 3 || i < 0 {
+		return "", fmt.Errorf("github: %s, no release tag", resp.Status)
 	}
-	var rel struct {
-		Tag string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return "", err
-	}
-	return rel.Tag, nil
+	return loc[i+len("/tag/"):], nil
 }
 
-// newerRelease returns the latest release tag when it is newer than the
-// running version. Dev builds and any lookup failure return "" silently;
-// an update hint is never worth failing a scan for.
-func newerRelease(ctx context.Context) string {
+// newerRelease returns the latest release version when it is newer than
+// the running one, else "". The error is only for the caller to show on
+// request; an update hint is never worth failing a scan for.
+func newerRelease(ctx context.Context) (string, error) {
 	cur, ok := data.ParseVersion(version)
 	if !ok {
-		return ""
+		return "", errors.New("dev build")
 	}
 	tag, err := latestRelease(ctx)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	latest, ok := data.ParseVersion(tag)
-	if !ok || !cur.Less(latest) {
-		return ""
+	if !ok {
+		return "", fmt.Errorf("unexpected release tag %q", tag)
 	}
-	return strings.TrimPrefix(tag, "v")
+	if !cur.Less(latest) {
+		return "", nil
+	}
+	return strings.TrimPrefix(tag, "v"), nil
+}
+
+// printVersion prints the running version and whether a newer one exists.
+func printVersion(ctx context.Context) {
+	newer, err := newerRelease(ctx)
+	switch {
+	case version == "dev":
+		fmt.Println(version)
+	case err != nil:
+		fmt.Printf("%s (update check failed: %v)\n", version, err)
+	case newer != "":
+		fmt.Printf("%s (update available: %s, run: kubegrade update)\n", version, newer)
+	default:
+		fmt.Printf("%s (latest)\n", version)
+	}
 }
 
 // selfUpdate replaces the running binary with the latest release after

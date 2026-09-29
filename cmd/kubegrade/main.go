@@ -55,7 +55,7 @@ func main() {
 	switch flag.Arg(0) {
 	case "":
 	case "version":
-		fmt.Println(version)
+		printVersion(context.Background())
 		return
 	case "update":
 		if err := selfUpdate(context.Background()); err != nil {
@@ -96,8 +96,11 @@ func run(o options, log *slog.Logger) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "cluster: %s (%s)\n", cluster, cfg.Host)
-	if v := newerRelease(ctx); v != "" {
-		fmt.Fprintf(os.Stderr, "update available: %s (running %s), run: kubegrade update\n", v, version)
+	switch newer, err := newerRelease(ctx); {
+	case err != nil && o.verbose > 0:
+		fmt.Fprintln(os.Stderr, "update check failed:", err)
+	case newer != "":
+		fmt.Fprintf(os.Stderr, "update available: %s (running %s), run: kubegrade update\n", newer, version)
 	}
 	bar, tick := progress.New()
 	defer bar.Done()
