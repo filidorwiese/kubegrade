@@ -114,7 +114,7 @@ func TestChartOutdated(t *testing.T) {
 	s.ChartLatest = map[string]collect.ChartUpstream{
 		"major": {Version: "2.0.0", Source: "https://src"},
 		"minor": {Version: "1.5.0", Guessed: true, Repo: "https://repo"},
-		"patch": {Version: "1.0.1"},
+		"patch": {Version: "1.0.1", Source: "https://src", Repo: "https://repo"},
 		"old":   {Version: "1.0.0", Deprecated: true},
 	}
 	by := map[string]Finding{}
@@ -127,7 +127,7 @@ func TestChartOutdated(t *testing.T) {
 	if f := by["helm a/minor chart-outdated"]; f.Severity != Low || f.Count != 3 || f.Link != "https://repo" {
 		t.Errorf("minor: %+v", f)
 	}
-	if f := by["helm a/patch chart-outdated"]; f.Severity != Info {
+	if f := by["helm a/patch chart-outdated"]; f.Severity != Info || f.Link != "https://src" {
 		t.Errorf("patch: %+v", f)
 	}
 	if f := by["helm a/old chart-deprecated"]; f.Severity != Medium {

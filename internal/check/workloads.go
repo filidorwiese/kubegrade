@@ -135,13 +135,16 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if !okCur || !okUp || !cur.Less(latest) {
 			continue
 		}
-		f := Finding{ID: "chart-outdated", Category: Versions, Resource: res, Fix: "helm upgrade to " + up.Version}
+		// The source repo holds the changelog; the Helm repo is the fallback.
+		f := Finding{ID: "chart-outdated", Category: Versions, Resource: res, Fix: "helm upgrade to " + up.Version, Link: up.Source}
+		if f.Link == "" {
+			f.Link = up.Repo
+		}
 		switch {
 		case latest.Major > cur.Major:
 			f.Severity = Medium
 			f.What = "major " + up.Version + " available, have " + r.Version
 			f.Fix = "major upgrade to " + up.Version
-			f.Link = up.Source
 		case latest.Minor > cur.Minor:
 			f.Severity = Low
 			f.Count = min(latest.Minor-cur.Minor, 3)
@@ -152,9 +155,6 @@ func (chartOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		}
 		if up.Guessed {
 			f.Fix += " (upstream guessed, pin in charts.yaml if wrong)"
-			if f.Link == "" {
-				f.Link = up.Repo
-			}
 		}
 		out = append(out, f)
 	}
