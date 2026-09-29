@@ -8,4 +8,5 @@
 
 ## Conventions
 
+- Every new check or feature ships with tests, but only for logic that can regress silently: thresholds, parsing, ordering, suppression between checks. Skip rendering goldens and plumbing.
 - Lint before committing: `gofmt`, `go vet`, `go run honnef.co/go/tools/cmd/staticcheck@latest ./...`, `go run golang.org/x/tools/cmd/deadcode@latest ./...`.
