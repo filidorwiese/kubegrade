@@ -1,14 +1,59 @@
 name: release
 
+# Releases on a v* tag, and every Monday when the vendored EOL tables
+# changed: the data is committed to main and the patch version bumped.
 on:
   push:
     tags: ["v*"]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'push' && github.ref || 'main' }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Refresh built-in EOL tables
+        run: go run ./hack/refresh-data internal/data
+      - name: Decide version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # DATE always changes; only real table changes justify a release.
+          if git diff --quiet -- internal/data ':!internal/data/eol/DATE'; then
+            echo "tables unchanged, no release"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add internal/data
+          git commit -m "Refresh EOL tables"
+          git push origin HEAD:main
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)
+          IFS=. read -r major minor patch <<< "${last#v}"
+          echo "version=$major.$minor.$((patch + 1))" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.version != ''
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,6 +64,8 @@ jobs:
           - { goos: darwin, goarch: arm64 }
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -30,7 +77,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v}" \
+          go build -trimpath -ldflags "-s -w -X main.version=${{ needs.prepare.outputs.version }}" \
             -o kubegrade_${GOOS}_${GOARCH} ./cmd/kubegrade
       - uses: actions/upload-artifact@v4
         with:
@@ -38,7 +85,7 @@ jobs:
           path: kubegrade_${{ matrix.goos }}_${{ matrix.goarch }}
 
   release:
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -49,5 +96,7 @@ jobs:
         run: cd dist && sha256sum kubegrade_* > checksums.txt
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.prepare.outputs.version }}
+          target_commitish: ${{ needs.prepare.outputs.sha }}
           files: dist/*
           generate_release_notes: true
