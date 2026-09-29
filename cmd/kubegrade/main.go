@@ -42,17 +42,31 @@ func main() {
 	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
 	v := flag.Bool("v", false, "show info findings")
 	vv := flag.Bool("vv", false, "also show checks that passed")
-	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "kubegrade grades the upkeep of your Kubernetes cluster from A+ to F.")
-		fmt.Fprintln(os.Stderr, "\nUsage: kubegrade [flags]\n\nFlags:")
+		fmt.Fprintln(os.Stderr, "\nUsage: kubegrade [flags]        scan the current cluster")
+		fmt.Fprintln(os.Stderr, "       kubegrade update         replace this binary with the latest release")
+		fmt.Fprintln(os.Stderr, "       kubegrade version\n\nFlags:")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 
-	if *showVersion {
+	// A bare word before any flag is a command; no command means scan.
+	switch flag.Arg(0) {
+	case "":
+	case "version":
 		fmt.Println(version)
 		return
+	case "update":
+		if err := selfUpdate(context.Background()); err != nil {
+			fmt.Fprintln(os.Stderr, "update failed:", err)
+			os.Exit(1)
+		}
+		return
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q\n", flag.Arg(0))
+		flag.Usage()
+		os.Exit(2)
 	}
 	switch {
 	case *vv:
