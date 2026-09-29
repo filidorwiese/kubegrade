@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/filidorwiese/kubegrade/internal/check"
 	"github.com/filidorwiese/kubegrade/internal/grade"
 	"github.com/filidorwiese/kubegrade/internal/report"
@@ -36,7 +38,12 @@ func main() {
 		Agent: "0.1.0", Cluster: "demo", ScannedAt: time.Date(2026, 9, 28, 14, 0, 12, 0, time.UTC),
 		Duration: 5300 * time.Millisecond, Findings: findings, Result: grade.Compute(findings),
 	})
-	if err := report.WriteText(os.Stdout, r, report.TextOptions{Color: true, Width: 130}); err != nil {
+	// Same width rule as the real run so the sample lays out identically.
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		width = 130
+	}
+	if err := report.WriteText(os.Stdout, r, report.TextOptions{Color: true, Width: width}); err != nil {
 		os.Exit(1)
 	}
 }
