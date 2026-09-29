@@ -1,5 +1,7 @@
 # kubegrade
 
+![example report](kubegrade-example-report.png)
+
 Grades the upkeep of your Kubernetes cluster from A+ to F. It scans read-only
 from your kubeconfig and suggests a fix for each finding. Nothing about the
 cluster leaves your machine; version data comes from
@@ -12,16 +14,14 @@ cluster leaves your machine; version data comes from
 Every finding deducts points by severity. The overall grade is capped by the
 weakest category.
 
-![example report](kubegrade-example-report.png)
-
 ## Install
 
 ```sh
 curl -sL https://github.com/filidorwiese/kubegrade/releases/latest/download/kubegrade_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o kubegrade && chmod +x kubegrade
 ```
 
-Read-only access to the whole cluster, including Helm and TLS secrets, lets
-every check run. Missing permissions skip a check and are listed in the report.
+Reads $KUBECONFIG or ~/.kube/config. Needs cluster-wide read access.
+Missing permissions skip a check and are listed in the report.
 
 ## Usage
 
