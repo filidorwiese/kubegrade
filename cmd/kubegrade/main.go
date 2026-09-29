@@ -100,7 +100,11 @@ func run(o options, log *slog.Logger) error {
 	case err != nil && o.verbose > 0:
 		fmt.Fprintln(os.Stderr, "update check failed:", err)
 	case newer != "":
-		fmt.Fprintf(os.Stderr, "update available: %s (running %s), run: kubegrade update\n", newer, version)
+		hint := fmt.Sprintf("update available: %s (running %s), run: kubegrade update", newer, version)
+		if useColor(o, os.Stderr) {
+			hint = "\033[33m" + hint + "\033[0m"
+		}
+		fmt.Fprintln(os.Stderr, hint)
 	}
 	bar, tick := progress.New()
 	defer bar.Done()
@@ -133,7 +137,7 @@ func run(o options, log *slog.Logger) error {
 	if o.format == "json" {
 		return report.WriteJSON(os.Stdout, rep)
 	}
-	return report.WriteText(os.Stdout, rep, report.TextOptions{Color: useColor(o), Width: termWidth(), Verbose: o.verbose})
+	return report.WriteText(os.Stdout, rep, report.TextOptions{Color: useColor(o, os.Stdout), Width: termWidth(), Verbose: o.verbose})
 }
 
 // termWidth is the stdout terminal width, or 0 when stdout is not a tty.
@@ -145,12 +149,12 @@ func termWidth() int {
 	return w
 }
 
-// useColor is on for a terminal stdout unless --no-color or NO_COLOR is set.
-func useColor(o options) bool {
+// useColor is on when f is a terminal unless --no-color or NO_COLOR is set.
+func useColor(o options, f *os.File) bool {
 	if o.noColor || os.Getenv("NO_COLOR") != "" {
 		return false
 	}
-	fi, err := os.Stdout.Stat()
+	fi, err := f.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
