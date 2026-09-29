@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -55,10 +56,13 @@ func (c *Collector) certificates(ctx context.Context, s *Snapshot) error {
 		})
 	}
 
-	// cert-manager is optional; a missing CRD is not an error.
+	// cert-manager is optional; only a missing CRD is not an error.
 	list, err := c.dyn.Resource(certificatesGVR).Namespace("").List(ctx, metav1.ListOptions{})
-	if err != nil {
+	if apierrors.IsNotFound(err) {
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 	for _, u := range list.Items {
 		conds, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
