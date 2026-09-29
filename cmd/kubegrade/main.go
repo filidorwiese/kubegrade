@@ -42,6 +42,11 @@ func main() {
 	flag.BoolVar(&o.noColor, "no-color", false, "disable coloured output (NO_COLOR env also works)")
 	flag.BoolVar(&o.verbose, "v", false, "show info findings")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "kubegrade grades the upkeep of your Kubernetes cluster from A+ to F.")
+		fmt.Fprintln(os.Stderr, "\nUsage: kubegrade [flags]\n\nFlags:")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	if *showVersion {
