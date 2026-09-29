@@ -15,6 +15,11 @@ tasks:
     cmds:
       - go run ./cmd/kubegrade {{.CLI_ARGS}}
 
+  test:
+    desc: Run the unit tests
+    cmds:
+      - go test ./...
+
   refresh-data:
     desc: Refresh built-in EOL tables and Pluto deprecations
     cmds:

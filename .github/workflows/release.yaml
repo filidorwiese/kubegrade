@@ -28,6 +28,10 @@ jobs:
           go-version-file: go.mod
       - name: Refresh built-in EOL tables
         run: go run ./hack/refresh-data internal/data
+      # After the refresh so the vendored tables are tested too, before the
+      # commit so a failure leaves main and the releases untouched.
+      - name: Test
+        run: go test ./...
       - name: Decide version
         id: version
         run: |

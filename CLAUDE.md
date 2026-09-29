@@ -8,5 +8,4 @@
 
 ## Conventions
 
-- No committed tests by choice; verify with a throwaway `_test.go`, then delete it.
 - Lint before committing: `gofmt`, `go vet`, `go run honnef.co/go/tools/cmd/staticcheck@latest ./...`, `go run golang.org/x/tools/cmd/deadcode@latest ./...`.
