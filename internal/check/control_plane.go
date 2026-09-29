@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
@@ -15,6 +16,7 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	tbl := s.Tables.Kubernetes
 	cur := minor(s.ServerVersion)
 	resource := "kubernetes " + trimV(s.ServerVersion)
+	link := releaseLink(s.ServerVersion, tbl.Latest)
 	var out []Finding
 
 	v, ok := tbl.Find(cur)
@@ -40,14 +42,14 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 				what = "unsupported since " + v.EOL + " (" + fmtInt(-days(left)) + " days ago)"
 			}
 			out = append(out, Finding{ID: "k8s-version-eol", Category: Versions, Severity: sev,
-				Resource: resource, What: what, Fix: "upgrade to " + tbl.Latest})
+				Resource: resource, What: what, Fix: "upgrade to " + tbl.Latest, Link: link})
 		}
 	}
 
 	// One minor behind is the normal place to be; points start at two.
 	behind := minorInt(tbl.Latest) - minorInt(cur)
 	if behind > 0 {
-		f := Finding{ID: "k8s-version-behind", Category: Versions, Severity: Info,
+		f := Finding{ID: "k8s-version-behind", Category: Versions, Severity: Info, Link: link,
 			Resource: "kubernetes " + cur, What: plural(behind, "minor") + " behind latest known (" + tbl.Latest + ")"}
 		if behind > 1 {
 			f.Severity, f.Count = Low, min(behind-1, 3)
@@ -55,6 +57,15 @@ func (k8sVersion) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		out = append(out, f)
 	}
 	return out
+}
+
+// releaseLink points at the k3s releases page for k3s clusters, else the
+// upstream changelog of the target minor.
+func releaseLink(serverVersion, latest string) string {
+	if strings.Contains(serverVersion, "+k3s") {
+		return "https://github.com/k3s-io/k3s/releases"
+	}
+	return "https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-" + latest + ".md"
 }
 
 type k8sDeprecated struct{}

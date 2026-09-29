@@ -182,16 +182,12 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	// Findings table.
 	var rows []Finding
 	hidden := 0
-	var links []Finding
 	for _, f := range r.Findings {
 		if !opt.Verbose && f.Severity == string(check.Info) {
 			hidden++
 			continue
 		}
 		rows = append(rows, f)
-		if f.Link != "" {
-			links = append(links, f)
-		}
 	}
 	if len(rows) > 0 {
 		resW, whatW, fixW := columnWidths(rows, opt.Width)
@@ -204,7 +200,11 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 		cells := func(f Finding) [][]string {
 			c := [][]string{{f.Severity}, {f.Category}, wrap(f.Resource, resW), wrap(f.What, whatW)}
 			if fixW > 0 {
-				c = append(c, wrap(f.Fix, fixW))
+				fix := wrap(f.Fix, fixW)
+				if f.Link != "" {
+					fix = append(fix, wrap(f.Link, fixW)...)
+				}
+				c = append(c, fix)
 			} else if f.Fix != "" {
 				fixes = append(fixes, f)
 			}
@@ -254,8 +254,11 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 			}
 			sev := f.Severity
 			fmt.Fprintln(w, row(cells(f), func(i int, s string) string {
-				if i == 0 {
+				switch {
+				case i == 0:
 					return paint(severityStyle[sev], s)
+				case i == 4 && strings.HasPrefix(s, "http"):
+					return paint(dim, s)
 				}
 				return s
 			}))
@@ -265,6 +268,9 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 			fmt.Fprintln(w, "\n"+paint(bold, "Fixes"))
 			for _, f := range fixes {
 				fmt.Fprintf(w, "  %s: %s\n", f.Resource, f.Fix)
+				if f.Link != "" {
+					fmt.Fprintln(w, "    "+paint(dim, f.Link))
+				}
 			}
 		}
 	} else {
@@ -274,12 +280,6 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 		fmt.Fprintln(w, paint(dim, fmt.Sprintf("  %d info hidden, -v to show", hidden)))
 	}
 
-	if len(links) > 0 {
-		fmt.Fprint(w, "\n"+paint(bold, "External links")+"\n")
-		for _, f := range links {
-			fmt.Fprintf(w, "  %s: %s\n", f.Resource, f.Link)
-		}
-	}
 	if len(r.Errors) > 0 {
 		fmt.Fprint(w, "\n"+paint(bold+red, "Collector errors")+"\n")
 		for _, e := range r.Errors {
@@ -312,18 +312,22 @@ func summarise(fs []Finding, category string) string {
 // Resource and fix get modest caps; the finding column takes the rest.
 // Fix is dropped below the table when there is no room for it.
 func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
+	linkW := 0
 	for _, f := range fs {
 		resW = max(resW, utf8.RuneCountInString(f.Resource))
 		whatW = max(whatW, utf8.RuneCountInString(f.What))
 		fixW = max(fixW, utf8.RuneCountInString(f.Fix))
+		linkW = max(linkW, utf8.RuneCountInString(f.Link))
 	}
 	if width <= 0 {
-		return resW, whatW, fixW
+		return resW, whatW, max(fixW, linkW)
 	}
 	const fixed = 16 + 8 + 8
 	avail := width - fixed
 	resW = min(resW, 32)
-	fixW = min(fixW, 28)
+	// Links sit under the fix text; a cut URL cannot be copied, so the
+	// column grows for them with space the finding column does not need.
+	fixW = max(min(fixW, 28), min(linkW, 48, avail-resW-whatW))
 	if rest := avail - resW - fixW; rest >= 30 {
 		return resW, min(whatW, rest), fixW
 	}

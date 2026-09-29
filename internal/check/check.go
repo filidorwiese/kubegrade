@@ -41,8 +41,7 @@ type Finding struct {
 	Resource string
 	What     string
 	Fix      string
-	// Link is an optional URL with more detail, printed separately so the
-	// fix column stays short.
+	// Link is an optional URL shown under the fix.
 	Link string
 	// Since is set when the finding describes a condition with a start time.
 	Since *time.Time
