@@ -1,11 +1,10 @@
-# kubegrade
+# Kubegrade
+
+Grades the upkeep of your Kubernetes cluster from A+ to F.
 
 ![example report](kubegrade-example-report.png)
 
-Grades the upkeep of your Kubernetes cluster from A+ to F. It scans read-only
-from your kubeconfig and suggests a fix for each finding. Nothing about the
-cluster leaves your machine; version data comes from
-[endoflife.date](https://endoflife.date) and [Artifact Hub](https://artifacthub.io).
+Kubegrade CLI-tool scans your Kubernetes cluster for these upkeep issues:
 
 - **Versions**: Kubernetes, kernel and OS support windows, kubelet skew, Helm charts vs upstream, deprecated charts.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, node drift, cordoned nodes, leftover pods, unmounted volumes, expired unused TLS secrets.
@@ -13,6 +12,9 @@ cluster leaves your machine; version data comes from
 
 Every finding deducts points by severity. The overall grade is capped by the
 weakest category.
+
+Note: nothing about the cluster leaves your machine; version data comes from
+[endoflife.date](https://endoflife.date) and [Artifact Hub](https://artifacthub.io).
 
 ## Install
 
