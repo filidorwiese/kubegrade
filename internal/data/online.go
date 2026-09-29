@@ -191,20 +191,57 @@ type osProduct struct {
 	build   func([]cycle) []Distro
 }
 
+// Match strings follow each distro's PRETTY_NAME, which is what the kubelet
+// reports as osImage, e.g. "Rocky Linux 9.4 (Blue Onyx)".
 var osProducts = []osProduct{
-	{"ubuntu", func(cs []cycle) []Distro {
-		return distros(cs, "ubuntu", func(c cycle) string { return "Ubuntu " + c.Cycle })
-	}},
-	{"debian", func(cs []cycle) []Distro {
-		return distros(cs, "debian", func(c cycle) string { return "Debian GNU/Linux " + c.Cycle })
-	}},
-	{"amazon-linux", func(cs []cycle) []Distro {
-		return distros(cs, "amazon-linux", func(c cycle) string { return "Amazon Linux " + c.Cycle })
+	{"ubuntu", prefix("ubuntu", "Ubuntu ")},
+	{"debian", prefix("debian", "Debian GNU/Linux ")},
+	{"amazon-linux", prefix("amazon-linux", "Amazon Linux ")},
+	{"rhel", prefix("rhel", "Red Hat Enterprise Linux ")},
+	{"rocky-linux", prefix("rocky", "Rocky Linux ")},
+	{"almalinux", prefix("alma", "AlmaLinux ")},
+	{"alpine-linux", prefix("alpine", "Alpine Linux v")},
+	{"fedora", prefix("fedora", "Fedora Linux ", "Fedora CoreOS ")},
+	{"opensuse", prefix("opensuse", "openSUSE Leap ")},
+	{"sles", func(cs []cycle) []Distro {
+		// SLES names service packs "15 SP6" for cycle "15.6".
+		return distros(cs, "sles", func(c cycle) string {
+			if maj, sp, ok := strings.Cut(c.Cycle, "."); ok && sp != "0" {
+				return "SUSE Linux Enterprise Server " + maj + " SP" + sp
+			}
+			return "SUSE Linux Enterprise Server " + c.Cycle
+		})
 	}},
 }
 
-// Flatcar publishes no EOL per version; matched so it is not "unknown OS".
-var rollingDistros = []Distro{{Match: "Flatcar", Name: "flatcar", Version: "rolling"}}
+// Products is every endoflife.date product the tables use; the refresh
+// tool vendors exactly this list.
+var Products = func() []string {
+	out := []string{"kubernetes", "linux"}
+	for _, p := range osProducts {
+		out = append(out, p.product)
+	}
+	return out
+}()
+
+// Rolling distros publish no EOL per version; matched so they are not
+// reported as unknown.
+var rollingDistros = []Distro{
+	{Match: "Flatcar", Name: "flatcar", Version: "rolling"},
+	{Match: "Talos", Name: "talos", Version: "rolling"},
+	{Match: "Bottlerocket", Name: "bottlerocket", Version: "rolling"},
+}
+
+// prefix builds distros whose match is one of the prefixes plus the cycle.
+func prefix(name string, prefixes ...string) func([]cycle) []Distro {
+	return func(cs []cycle) []Distro {
+		var out []Distro
+		for _, p := range prefixes {
+			out = append(out, distros(cs, name, func(c cycle) string { return p + c.Cycle })...)
+		}
+		return out
+	}
+}
 
 func distros(cs []cycle, name string, match func(cycle) string) []Distro {
 	var out []Distro

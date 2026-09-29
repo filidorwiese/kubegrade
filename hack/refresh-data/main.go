@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/filidorwiese/kubegrade/internal/data"
 )
 
 const plutoURL = "https://raw.githubusercontent.com/FairwindsOps/pluto/master/versions.yaml"
@@ -22,8 +24,6 @@ const plutoHeader = "# Vendored from https://github.com/FairwindsOps/pluto (vers
 
 const eolBase = "https://endoflife.date/api/"
 
-var eolProducts = []string{"kubernetes", "linux", "ubuntu", "debian", "amazon-linux"}
-
 func main() {
 	dir := "internal/data"
 	if len(os.Args) > 1 {
@@ -31,7 +31,7 @@ func main() {
 	}
 	write(filepath.Join(dir, "k8s-deprecations.yaml"), append([]byte(plutoHeader), get(plutoURL)...))
 
-	for _, p := range eolProducts {
+	for _, p := range data.Products {
 		body := get(eolBase + p + ".json")
 		// A shape change upstream must fail here, not in a user's scan.
 		var cycles []map[string]any
