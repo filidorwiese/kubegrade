@@ -7,8 +7,8 @@ import (
 )
 
 func TestPointsCount(t *testing.T) {
-	if got := Points(check.Finding{Severity: check.Low, Count: 3}); got != 9 {
-		t.Errorf("low x3 = %d, want 9", got)
+	if got := Points(check.Finding{Severity: check.Low, Count: 3}); got != 6 {
+		t.Errorf("low x3 = %d, want 6", got)
 	}
 	if got := Points(check.Finding{Severity: check.OK}); got != 0 {
 		t.Errorf("ok = %d, want 0", got)

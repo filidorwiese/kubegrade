@@ -11,7 +11,7 @@ import (
 
 var points = map[check.Severity]int{
 	check.Info:     0,
-	check.Low:      3,
+	check.Low:      2,
 	check.Medium:   8,
 	check.High:     15,
 	check.Critical: 30,
