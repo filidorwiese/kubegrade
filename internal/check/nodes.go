@@ -89,20 +89,6 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	return out
 }
 
-// uptime renders the node uptime, as a range when the group spans several
-// nodes. Empty when the kubelet stats gave no start time.
-func uptime(s *collect.Snapshot, nodes []string) string {
-	lo, hi, ok := uptimeRange(s, nodes)
-	switch {
-	case !ok:
-		return ""
-	case humanDuration(lo) == humanDuration(hi):
-		return humanDuration(lo)
-	default:
-		return humanDuration(lo) + " to " + humanDuration(hi)
-	}
-}
-
 func uptimeRange(s *collect.Snapshot, nodes []string) (lo, hi time.Duration, ok bool) {
 	for _, n := range nodes {
 		t, found := s.NodeStart[n]
@@ -194,24 +180,10 @@ func driftGroups(s *collect.Snapshot) []driftGroup {
 	return out
 }
 
-// driftedNodes names the nodes in any drift group, or only those of one
-// field. Other node checks use it to leave those nodes to node-drift.
-func driftedNodes(s *collect.Snapshot, field string) map[string]bool {
-	out := map[string]bool{}
-	for _, g := range driftGroups(s) {
-		if field != "" && g.field != field {
-			continue
-		}
-		for _, n := range g.nodes {
-			out[n] = true
-		}
-	}
-	return out
-}
-
 // nodeDrift reports each group of nodes lagging the newest kernel, kubelet
 // or runtime in the cluster as one row; the OS image is not orderable, so
-// there the odd ones out are measured against the majority.
+// there the odd ones out are measured against the majority. How long the
+// node has been up is node-uptime's business.
 func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	rebooting := kuredRebooting(s)
@@ -235,12 +207,6 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		sev := Low
 		if g.field == "kernel" {
 			sev = kernelGapSeverity(g.value, g.ref)
-		}
-		if _, hi, ok := uptimeRange(s, g.nodes); ok {
-			what += ", up " + uptime(s, g.nodes)
-			if hi > 30*24*time.Hour {
-				sev = bump(sev)
-			}
 		}
 		if (g.field == "kernel" || g.field == "OS") && len(rebooting) > 0 {
 			what += ", kured rebooting " + strings.Join(rebooting, ", ")
@@ -332,18 +298,6 @@ func kernelGapSeverity(have, want string) Severity {
 		return Medium
 	}
 	return Low
-}
-
-func bump(s Severity) Severity {
-	switch s {
-	case Low:
-		return Medium
-	case Medium:
-		return High
-	case High:
-		return Critical
-	}
-	return s
 }
 
 type nodeNotReady struct{}
@@ -449,14 +403,11 @@ type nodeUptime struct{}
 // few kernel security releases on every distro; four months is certain.
 // When the running kernel carries the upstream patch level, a newer
 // release in its series that is old enough to be packaged is named.
-// Nodes behind a peer's kernel are node-drift's, which says what to catch
-// up to; this check covers the case where every node is equally stale.
 func (nodeUptime) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
-	behind := driftedNodes(s, "kernel")
 	for _, n := range s.Nodes {
 		start, ok := s.NodeStart[n.Name]
-		if !ok || behind[n.Name] {
+		if !ok {
 			continue
 		}
 		up := s.ScannedAt.Sub(start)
