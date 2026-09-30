@@ -179,7 +179,7 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 	}
 
 	fmt.Fprintf(w, "%s  scanned: %s  duration: %.1fs\n",
-		paint(bold, "kubegrade v"+r.Agent), r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
+		"kubegrade v"+r.Agent, r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
 	for _, l := range inventoryLines(r.Inventory) {
 		fmt.Fprintln(w, l)
 	}

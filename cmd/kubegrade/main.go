@@ -95,7 +95,11 @@ func run(o options, log *slog.Logger) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "cluster: %s (%s)\n", cluster, cfg.Host)
+	head := "cluster: " + cluster + " (" + cfg.Host + ")"
+	if useColor(o, os.Stderr) {
+		head = "\033[1m" + head + "\033[0m"
+	}
+	fmt.Fprintln(os.Stderr, head)
 	switch newer, err := newerRelease(ctx); {
 	case err != nil && o.verbose > 0:
 		fmt.Fprintln(os.Stderr, "update check failed:", err)

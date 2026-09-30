@@ -2,7 +2,7 @@ version: "3"
 
 vars:
   VERSION:
-    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+    sh: git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev
 
 tasks:
   build:
