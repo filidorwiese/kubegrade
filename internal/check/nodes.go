@@ -144,6 +144,9 @@ func driftGroups(s *collect.Snapshot) []driftGroup {
 	for _, f := range driftFields {
 		counts := map[string]int{}
 		for _, n := range s.Nodes {
+			if _, pending := s.KernelLatest[n.Name]; pending && f.label == "kernel" {
+				continue
+			}
 			counts[f.get(n.Status.NodeInfo)]++
 		}
 		if len(counts) < 2 {
@@ -159,6 +162,9 @@ func driftGroups(s *collect.Snapshot) []driftGroup {
 		var refNodes, order []string
 		groups := map[string]*driftGroup{}
 		for _, n := range s.Nodes {
+			if _, pending := s.KernelLatest[n.Name]; pending && f.label == "kernel" {
+				continue // kernel-update names the real target for this node
+			}
 			v := f.get(n.Status.NodeInfo)
 			if v == ref {
 				refNodes = append(refNodes, n.Name)
@@ -416,10 +422,9 @@ func (nodeCordoned) Run(_ context.Context, s *collect.Snapshot) []Finding {
 
 type nodeUptime struct{}
 
-// nodeUptime flags nodes that skipped reboots. A month of uptime spans a
-// few kernel security releases on every distro; four months is certain.
-// When the running kernel carries the upstream patch level, a newer
-// release in its series that is old enough to be packaged is named.
+// nodeUptime nudges about nodes that have not rebooted in four months.
+// Uptime alone proves nothing about missed updates (kernel-update does
+// that where a distro feed exists), so this stays informational.
 func (nodeUptime) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
@@ -428,44 +433,70 @@ func (nodeUptime) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			continue
 		}
 		up := s.ScannedAt.Sub(start)
-		if up <= 30*24*time.Hour {
+		if up <= 120*24*time.Hour {
 			continue
 		}
-		f := Finding{ID: "node-uptime", Category: Hygiene, Severity: Info, Resource: "node " + n.Name,
+		out = append(out, Finding{ID: "node-uptime", Category: Hygiene, Severity: Info, Resource: "node " + n.Name,
 			What: "up " + humanDuration(up) + " without a reboot",
-			Fix:  "check for a pending kernel update and reboot if available", Since: &start}
-		if up > 120*24*time.Hour {
-			f.Severity = Low
-		}
-		if newer, date := newerKernel(s, n.Status.NodeInfo.KernelVersion); newer != "" {
-			f.Severity = Low
-			f.What += ", " + newer + " out since " + date
-		}
-		out = append(out, f)
+			Fix:  "check for a pending kernel update and reboot if available", Since: &start})
 	}
 	return out
 }
 
-// newerKernel returns the newest patch release of the running series when
-// it is over 30 days old, so the distro had time to ship it. Frozen-base
-// kernels (Ubuntu 6.8.0-45, RHEL 5.14.0-427) carry no upstream patch level
-// and are skipped; their patch number is always zero.
-func newerKernel(s *collect.Snapshot, kernelVersion string) (version, date string) {
-	running, ok := data.ParseVersion(collect.ShortKernel(kernelVersion))
-	if !ok || running.Patch == 0 {
-		return "", ""
+type kernelUpdate struct{}
+
+// kernelUpdate reports nodes whose distro ships a newer kernel for the
+// series they run, one row per version pair. Peers already on the newer
+// kernel are counted as proof it installs fine.
+func (kernelUpdate) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	type key struct{ have, latest, source string }
+	var order []key
+	groups := map[key][]string{}
+	for _, n := range s.Nodes {
+		up, ok := s.KernelLatest[n.Name]
+		if !ok {
+			continue
+		}
+		k := key{up.Have, up.Latest, up.Source}
+		if _, seen := groups[k]; !seen {
+			order = append(order, k)
+		}
+		groups[k] = append(groups[k], n.Name)
 	}
-	k, ok := s.Tables.Kernel.Find(minor(kernelVersion))
-	if !ok {
-		return "", ""
+	kured := kuredInstalled(s)
+	var out []Finding
+	for _, k := range order {
+		nodes := groups[k]
+		res := "node " + nodes[0]
+		if len(nodes) > 1 {
+			res = "nodes " + strings.Join(nodes, ", ")
+		}
+		what := "kernel " + k.have + ", " + k.latest + " available in " + k.source
+		if n := onKernel(s, k.latest); n > 0 {
+			what += ", " + plural(n, "node") + " already on it"
+		}
+		fix := "upgrade and reboot onto " + k.latest
+		if kured {
+			fix += " or wait for kured"
+		}
+		out = append(out, Finding{ID: "kernel-update", Category: Versions, Severity: Low, Count: min(len(nodes), 3),
+			Resource: res, What: what, Fix: fix})
 	}
-	latest, ok := data.ParseVersion(k.Latest)
-	if !ok || !running.Less(latest) {
-		return "", ""
-	}
-	released, ok := data.ParseDate(k.LatestDate)
-	if !ok || s.ScannedAt.Sub(released) < 30*24*time.Hour {
-		return "", ""
-	}
-	return k.Latest, k.LatestDate
+	return out
 }
+
+// onKernel counts nodes whose kernel string starts with the version, e.g.
+// "6.12.111" matches "6.12.111+deb13-amd64" and "6.8.0-142" matches
+// "6.8.0-142-generic".
+func onKernel(s *collect.Snapshot, version string) int {
+	n := 0
+	for _, node := range s.Nodes {
+		kv := node.Status.NodeInfo.KernelVersion
+		if strings.HasPrefix(kv, version) && (len(kv) == len(version) || !isDigit(kv[len(version)])) {
+			n++
+		}
+	}
+	return n
+}
+
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }

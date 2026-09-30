@@ -274,30 +274,14 @@ func normURL(u string) string {
 }
 
 func getJSON(ctx context.Context, u string, dst any) error {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	body, err := fetch(ctx, u, "application/json")
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return errRateLimited
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(body, dst)
+	return unmarshal(body, dst)
 }
+
+func unmarshal(body []byte, dst any) error { return json.Unmarshal(body, dst) }
 
 // --- Helm repo index (charts.yaml override path) ---
 

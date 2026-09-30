@@ -45,7 +45,7 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	s := &Snapshot{ScannedAt: time.Now().UTC(), Tables: c.tables}
 	all := metav1.ListOptions{}
 	const phase = "collecting cluster data"
-	step, total := 0, 14
+	step, total := 0, 15
 	tick := func() {
 		step++
 		c.report(phase, step, total)
@@ -126,6 +126,8 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	c.try(s, "chart upstream", func() error { return c.chartUpstream(ctx, s) })
 	tick()
 	c.try(s, "image upstream", func() error { return c.imageUpstream(ctx, s) })
+	tick()
+	c.try(s, "kernel updates", func() error { return c.kernelUpdates(ctx, s) })
 	return s, nil
 }
 

@@ -73,6 +73,7 @@ func All() []entry {
 		{"image-outdated", Versions, "images", "docker hub images at the newest tag", imageOutdated{}},
 		{"kubelet-skew", Versions, "nodes", "kubelet versions match the api server", kubeletSkew{}},
 		{"kernel-eol", Versions, "nodes", "kernels within support", kernelEOL{}},
+		{"kernel-update", Versions, "nodes", "kernels at the newest the distro ships", kernelUpdate{}},
 		{"os-eol", Versions, "nodes", "os releases within support", osEOL{}},
 		{"node-drift", Versions, "nodes", "kernel, os, kubelet and runtime in sync", nodeDrift{}},
 		{"node-notready", Health, "nodes", "all ready", nodeNotReady{}},

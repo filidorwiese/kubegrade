@@ -462,47 +462,48 @@ func TestDeployUnavailableSuppressed(t *testing.T) {
 	}
 }
 
-// Uptime alone is a weak signal, so it starts at info; a newer patch
-// release in the running series that the node never loaded makes it low.
 func TestNodeUptime(t *testing.T) {
 	s := snap()
-	s.Tables.Kernel = data.Kernel{Kernels: []data.KernelVersion{
-		{Version: "6.12", LTS: true, Latest: "6.12.110", LatestDate: day(-45)},
-		{Version: "6.8", Latest: "6.8.12", LatestDate: day(-45)},
-		{Version: "6.6", LTS: true, Latest: "6.6.50", LatestDate: day(-5)},
-	}}
+	s.Nodes = []corev1.Node{node("fresh", "6.12.100", "Debian"), node("long", "6.12.100", "Debian"), node("unknown", "6.12.100", "x")}
+	s.NodeStart["fresh"], s.NodeStart["long"] = now.AddDate(0, 0, -100), now.AddDate(0, 0, -130)
+	fs := run(nodeUptime{}, s)
+	if len(fs) != 1 || fs[0].Resource != "node long" || fs[0].Severity != Info || fs[0].What != "up 130d without a reboot" {
+		t.Errorf("got %+v", fs)
+	}
+}
+
+// Nodes sharing a pending update share a row; peers already on the new
+// kernel are counted; node-drift leaves those nodes alone.
+func TestKernelUpdate(t *testing.T) {
+	s := snap()
 	s.Nodes = []corev1.Node{
-		node("fresh", "6.12.100+deb13-amd64", "Debian"),
-		node("month", "6.12.110+deb13-amd64", "Debian"),
-		node("stale", "6.12.100+deb13-amd64", "Debian"),
-		node("ubuntu", "6.8.0-45-generic", "Ubuntu"),
-		node("recent-release", "6.6.40-talos", "Talos"),
-		node("long", "6.12.110+deb13-amd64", "Debian"),
-		node("unknown", "6.12.100", "x"),
+		node("old1", "6.12.107+deb13-amd64", "Debian 13"), node("old2", "6.12.107+deb13-amd64", "Debian 13"),
+		node("new", "6.12.111+deb13-amd64", "Debian 13"), node("ubu", "6.8.0-131-generic", "Ubuntu 24.04"),
 	}
-	for name, days := range map[string]int{"fresh": 10, "month": 40, "stale": 40, "ubuntu": 40, "recent-release": 40, "long": 130} {
-		s.NodeStart[name] = now.AddDate(0, 0, -days)
+	deb := collect.KernelUpdate{Have: "6.12.107", Latest: "6.12.111", Source: "trixie-security"}
+	s.KernelLatest = map[string]collect.KernelUpdate{"old1": deb, "old2": deb,
+		"ubu": {Have: "6.8.0-131", Latest: "6.8.0-142", Source: "noble security"}}
+
+	fs := run(kernelUpdate{}, s)
+	if len(fs) != 2 {
+		t.Fatalf("got %+v", fs)
 	}
-	got := map[string]Finding{}
-	for _, f := range run(nodeUptime{}, s) {
-		got[f.Resource] = f
+	if f := fs[0]; f.Resource != "nodes old1, old2" || f.Count != 2 || f.Severity != Low ||
+		f.What != "kernel 6.12.107, 6.12.111 available in trixie-security, 1 node already on it" ||
+		f.Fix != "upgrade and reboot onto 6.12.111" {
+		t.Errorf("debian: %+v", f)
 	}
-	want := map[string]struct {
-		sev  Severity
-		what string
-	}{
-		"node month":          {Info, "up 40d without a reboot"},
-		"node stale":          {Low, "up 40d without a reboot, 6.12.110 out since " + day(-45)},
-		"node ubuntu":         {Info, "up 40d without a reboot"},
-		"node recent-release": {Info, "up 40d without a reboot"},
-		"node long":           {Low, "up 130d without a reboot"},
+	if f := fs[1]; f.Resource != "node ubu" || f.What != "kernel 6.8.0-131, 6.8.0-142 available in noble security" {
+		t.Errorf("ubuntu: %+v", f)
 	}
-	if len(got) != len(want) {
-		t.Errorf("got %d findings, want %d: %v", len(got), len(want), got)
-	}
-	for res, w := range want {
-		if f := got[res]; f.Severity != w.sev || f.What != w.what {
-			t.Errorf("%s: %q %q, want %q %q", res, f.Severity, f.What, w.sev, w.what)
+	for _, f := range run(nodeDrift{}, s) {
+		if strings.HasPrefix(f.What, "kernel") {
+			t.Errorf("drift must yield to kernel-update: %+v", f)
 		}
+	}
+	s.DaemonSets = []appsv1.DaemonSet{{}}
+	s.DaemonSets[0].Spec.Template.Spec.Containers = []corev1.Container{{Image: "ghcr.io/kubereboot/kured:1.17.0"}}
+	if fs = run(kernelUpdate{}, s); fs[0].Fix != "upgrade and reboot onto 6.12.111 or wait for kured" {
+		t.Errorf("kured: %q", fs[0].Fix)
 	}
 }

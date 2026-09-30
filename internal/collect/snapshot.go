@@ -38,6 +38,9 @@ type Snapshot struct {
 	ChartLatest map[string]ChartUpstream
 	// ImageTags is Docker Hub repo -> newest-pushed tags, first page only.
 	ImageTags map[string][]string
+	// KernelLatest is node name -> a newer kernel its distro ships; absent
+	// when the node is current or its distro has no adapter.
+	KernelLatest map[string]KernelUpdate
 
 	// Tables are the EOL tables used for this scan.
 	Tables *data.Tables

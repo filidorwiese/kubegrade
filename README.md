@@ -6,7 +6,7 @@ Grades the upkeep of your Kubernetes cluster from A+ to F: is it up to date, tid
 
 The kubegrade CLI scans your Kubernetes cluster for these upkeep issues:
 
-- **Versions**: Kubernetes, kernel and OS versions and support windows, kubelet skew, node drift, Helm charts vs upstream, deprecated charts.
+- **Versions**: Kubernetes, kernel and OS versions and support windows, pending kernel updates (Debian, Ubuntu), kubelet skew, node drift, Helm charts vs upstream, deprecated charts, Docker Hub images vs newest tag.
 - **Hygiene**: deprecated APIs, `:latest` tags, missing digests, Helm revision pile-up, cordoned nodes, skipped reboots, leftover pods, unmounted volumes, expired unused TLS secrets.
 - **Health**: crash loops, frequent restarts, image pull failures, pending pods, unavailable deployments, failed releases, NotReady nodes, node pressure, full disks and volumes, expiring certificates.
 
@@ -14,7 +14,8 @@ Every finding deducts points by severity. The overall grade is capped by the
 weakest category.
 
 Nothing about the cluster leaves your machine; version data comes from
-[endoflife.date](https://endoflife.date), [Artifact Hub](https://artifacthub.io) and [Docker Hub](https://hub.docker.com).
+[endoflife.date](https://endoflife.date), [Artifact Hub](https://artifacthub.io), [Docker Hub](https://hub.docker.com)
+and the Debian and Ubuntu package feeds.
 
 Kubegrade is a maintenance scanner, not a security scanner. Tools like [Trivy](https://github.com/aquasecurity/trivy) or [kube-bench](https://github.com/aquasecurity/kube-bench) cover that.
 
