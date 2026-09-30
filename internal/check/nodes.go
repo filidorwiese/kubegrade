@@ -187,10 +187,11 @@ func driftGroups(s *collect.Snapshot) []driftGroup {
 func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	rebooting := kuredRebooting(s)
+	kured := kuredInstalled(s)
 	for _, g := range driftGroups(s) {
 		res := "node " + g.nodes[0]
 		if len(g.nodes) > 1 {
-			res = fmtInt(len(g.nodes)) + " nodes"
+			res = "nodes " + strings.Join(g.nodes, ", ")
 		}
 		peers := plural(len(g.refNodes), "node")
 		what, fix := g.field+" "+g.value+" differs from "+peers+" on "+g.ref, "pending reboot or upgrade"
@@ -204,6 +205,9 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 				fix = "reboot onto " + g.ref
 			}
 		}
+		if (g.field == "kernel" || g.field == "OS") && kured {
+			fix += " or wait for kured"
+		}
 		sev := Low
 		if g.field == "kernel" {
 			sev = kernelGapSeverity(g.value, g.ref)
@@ -215,6 +219,19 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 			Resource: res, What: what, Fix: fix})
 	}
 	return out
+}
+
+// kuredInstalled is true when a DaemonSet runs a kured image. Kured only
+// reboots once the host asks for it, so waiting is a suggestion, not a fix.
+func kuredInstalled(s *collect.Snapshot) bool {
+	for _, d := range s.DaemonSets {
+		for _, c := range d.Spec.Template.Spec.Containers {
+			if strings.Contains(c.Image, "kured") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // kuredRebooting names the nodes kured is rebooting right now. Kured holds

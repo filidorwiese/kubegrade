@@ -383,7 +383,7 @@ func TestNodeDriftNewest(t *testing.T) {
 		t.Fatalf("got %d findings: %+v", len(fs), fs)
 	}
 	k := fs[0]
-	if k.Resource != "2 nodes" || k.Severity != Low || k.Count != 2 || k.Fix != "reboot onto 6.12.111" ||
+	if k.Resource != "nodes old1, old2" || k.Severity != Low || k.Count != 2 || k.Fix != "reboot onto 6.12.111" ||
 		k.What != "kernel 6.12.107 version drift, 1 node already on 6.12.111 for 4h" {
 		t.Errorf("kernel: %+v", k)
 	}
@@ -393,9 +393,13 @@ func TestNodeDriftNewest(t *testing.T) {
 
 	s.DaemonSets = []appsv1.DaemonSet{{ObjectMeta: metav1.ObjectMeta{Name: "kured", Namespace: "kube-system",
 		Annotations: map[string]string{"weave.works/kured-node-lock": `{"nodeID":"old2","created":"2026-09-30T08:00:00Z"}`}}}}
+	s.DaemonSets[0].Spec.Template.Spec.Containers = []corev1.Container{{Image: "ghcr.io/kubereboot/kured:1.17.0"}}
 	fs = run(nodeDrift{}, s)
 	if !strings.HasSuffix(fs[0].What, ", kured rebooting old2") || strings.Contains(fs[1].What, "kured") {
 		t.Errorf("kured lock: %q / %q", fs[0].What, fs[1].What)
+	}
+	if fs[0].Fix != "reboot onto 6.12.111 or wait for kured" || fs[1].Fix != "upgrade runtime to 2.1" {
+		t.Errorf("kured fix: %q / %q", fs[0].Fix, fs[1].Fix)
 	}
 	s.DaemonSets[0].Annotations["weave.works/kured-node-lock"] = `{"maxOwners":2,"locks":[{"nodeID":"old1"},{"nodeID":"old2"}]}`
 	if fs = run(nodeDrift{}, s); !strings.HasSuffix(fs[0].What, ", kured rebooting old1, old2") {
