@@ -16,7 +16,7 @@ weakest category.
 Nothing about the cluster leaves your machine; version data comes from
 [endoflife.date](https://endoflife.date), [Artifact Hub](https://artifacthub.io) and [Docker Hub](https://hub.docker.com).
 
-Kubegrade is a maintenance scanner, not a security scanner. Tools like Trivy or kube-bench cover that.
+Kubegrade is a maintenance scanner, not a security scanner. Tools like [Trivy](https://github.com/aquasecurity/trivy) or [kube-bench](https://github.com/aquasecurity/kube-bench) cover that.
 
 ## Install
 
