@@ -365,7 +365,7 @@ func columnWidths(fs []Finding, width int) (resW, whatW, fixW int) {
 	}
 	const fixed = 16 + 8 + 8
 	avail := width - fixed
-	resW = min(resW, 32)
+	resW = min(resW, 40)
 	// Links sit under the fix text. A cut URL cannot be copied, so links
 	// take width from the finding column down to its floor of 30.
 	fixW = min(fixW, 28)

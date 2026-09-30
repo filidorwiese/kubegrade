@@ -129,7 +129,7 @@ func TestImageOutdatedSkipsHelmAndBundled(t *testing.T) {
 	if len(fs) != 1 {
 		t.Fatalf("got %+v, want one finding", fs)
 	}
-	if fs[0].Fix != "bump tag and digest to 5.2.2" || fs[0].What != "patch 5.2.2 available, used by sts db/pma" {
+	if fs[0].Fix != "bump tag and digest to 5.2.2" || fs[0].Resource != "sts db/pma" || fs[0].What != "image phpmyadmin:5.2.1, patch 5.2.2 available" {
 		t.Errorf("got %q / %q", fs[0].What, fs[0].Fix)
 	}
 	if fs[0].Link != "https://hub.docker.com/_/phpmyadmin" {
@@ -160,10 +160,10 @@ func TestImageTagsDedupePerImage(t *testing.T) {
 	if len(latest) != 2 {
 		t.Fatalf("got %d findings, want 2 (one per image): %+v", len(latest), latest)
 	}
-	if latest[0].Resource != "image nginx:latest" || latest[0].What != "used by deploy web/app, deploy web/api" {
+	if latest[0].Resource != "deploy web/app +1" || latest[0].What != "image nginx:latest" {
 		t.Errorf("nginx: %q / %q", latest[0].Resource, latest[0].What)
 	}
-	if latest[1].Resource != "image redis" || latest[1].What != "used by deploy cache/redis" {
+	if latest[1].Resource != "deploy cache/redis" || latest[1].What != "image redis (no tag, defaults to latest)" {
 		t.Errorf("redis: %q / %q", latest[1].Resource, latest[1].What)
 	}
 }

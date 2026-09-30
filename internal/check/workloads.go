@@ -72,8 +72,7 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, img := range order {
 		out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Low,
-			Resource: "image " + shortImage(img),
-			What:     "used by " + strings.Join(users[img], ", "), Fix: "pin a version tag"})
+			Resource: firstUser(users[img]), What: "image " + shortImage(img) + untagged(img), Fix: "pin a version tag"})
 	}
 	if noDigest > 0 {
 		out = append(out, Finding{ID: "image-no-digest", Category: Hygiene, Severity: Info,
@@ -82,8 +81,27 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	return out
 }
 
-// shortImage drops the registry and path: "ghcr.io/org/app:latest" -> "app:latest".
+func untagged(img string) string {
+	if collect.ParseImage(img).Tag == "" {
+		return " (no tag, defaults to latest)"
+	}
+	return ""
+}
+
+// firstUser names one workload and counts the rest: "deploy web/app +2".
+func firstUser(users []string) string {
+	if len(users) > 1 {
+		return users[0] + " +" + fmtInt(len(users)-1)
+	}
+	return users[0]
+}
+
+// shortImage drops the registry, path and digest:
+// "ghcr.io/org/app:1.2@sha256:..." -> "app:1.2".
 func shortImage(img string) string {
+	if i := strings.Index(img, "@"); i >= 0 {
+		img = img[:i]
+	}
 	if i := strings.LastIndex(img, "/"); i >= 0 {
 		return img[i+1:]
 	}
@@ -120,22 +138,22 @@ func (imageOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if !ok {
 			continue
 		}
-		f := Finding{ID: "image-outdated", Category: Versions, Resource: "image " + shortImage(img),
+		f := Finding{ID: "image-outdated", Category: Versions, Resource: firstUser(users[img]),
 			Fix: "bump tag to " + newest, Link: hubLink(ref.HubRepo)}
 		if ref.Digest != "" {
 			f.Fix = "bump tag and digest to " + newest
 		}
-		by := ", used by " + strings.Join(users[img], ", ")
+		image := "image " + shortImage(img) + ", "
 		switch seg {
 		case 0:
 			f.Severity = Medium
-			f.What = "major " + newest + " available" + by
+			f.What = image + "major " + newest + " available"
 		case 1:
 			f.Severity = Low
-			f.What = "minor " + newest + " available" + by
+			f.What = image + "minor " + newest + " available"
 		default:
 			f.Severity = Info
-			f.What = "patch " + newest + " available" + by
+			f.What = image + "patch " + newest + " available"
 		}
 		out = append(out, f)
 	}
