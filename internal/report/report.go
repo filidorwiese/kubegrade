@@ -12,20 +12,22 @@ import (
 	"unicode/utf8"
 
 	"github.com/filidorwiese/kubegrade/internal/check"
+	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/grade"
 )
 
 type Report struct {
-	Agent      string     `json:"agent"`
-	Cluster    string     `json:"cluster"`
-	ScannedAt  time.Time  `json:"scanned_at"`
-	Duration   float64    `json:"duration_seconds"`
-	Grade      string     `json:"grade"`
-	Score      int        `json:"score"`
-	CappedBy   string     `json:"capped_by,omitempty"`
-	Categories []Category `json:"categories"`
-	Findings   []Finding  `json:"findings"`
-	Errors     []string   `json:"errors,omitempty"`
+	Agent      string            `json:"agent"`
+	Cluster    string            `json:"cluster"`
+	ScannedAt  time.Time         `json:"scanned_at"`
+	Duration   float64           `json:"duration_seconds"`
+	Inventory  collect.Inventory `json:"inventory"`
+	Grade      string            `json:"grade"`
+	Score      int               `json:"score"`
+	CappedBy   string            `json:"capped_by,omitempty"`
+	Categories []Category        `json:"categories"`
+	Findings   []Finding         `json:"findings"`
+	Errors     []string          `json:"errors,omitempty"`
 }
 
 type Category struct {
@@ -51,6 +53,7 @@ type Input struct {
 	Agent, Cluster string
 	ScannedAt      time.Time
 	Duration       time.Duration
+	Inventory      collect.Inventory
 	Findings       []check.Finding
 	Result         grade.Result
 	Errors         []string
@@ -59,7 +62,7 @@ type Input struct {
 func Build(in Input) Report {
 	r := Report{
 		Agent: in.Agent, Cluster: in.Cluster, ScannedAt: in.ScannedAt.UTC(),
-		Duration: in.Duration.Seconds(), Grade: in.Result.Grade, Score: in.Result.Score,
+		Duration: in.Duration.Seconds(), Inventory: in.Inventory, Grade: in.Result.Grade, Score: in.Result.Score,
 		CappedBy: in.Result.CappedBy, Errors: in.Errors,
 	}
 	for _, c := range in.Result.Categories {
@@ -140,6 +143,31 @@ var glyphs = map[string][5]string{
 	"+": {"      ", "  ██  ", "██████", "  ██  ", "      "},
 }
 
+// inventoryLines is the header block: kubernetes version, node roles, OS.
+func inventoryLines(inv collect.Inventory) []string {
+	nodes := fmt.Sprintf("%d", inv.ControlPlane+inv.Workers)
+	if inv.ControlPlane > 0 {
+		nodes = fmt.Sprintf("%d control-plane, %d workers", inv.ControlPlane, inv.Workers)
+	}
+	return []string{
+		"kubernetes  " + inv.Version,
+		"nodes       " + nodes,
+		"os          " + counted(inv.OS),
+	}
+}
+
+// counted renders "a (9), b (3)", or just "a" when every node agrees.
+func counted(cs []collect.Count) string {
+	if len(cs) == 1 {
+		return cs[0].Value
+	}
+	parts := make([]string, len(cs))
+	for i, c := range cs {
+		parts[i] = fmt.Sprintf("%s (%d)", c.Value, c.Nodes)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // WriteText renders the grade banner with the category breakdown beside
 // it, then one table of all findings sorted by category and severity.
 func WriteText(w io.Writer, r Report, opt TextOptions) error {
@@ -150,8 +178,12 @@ func WriteText(w io.Writer, r Report, opt TextOptions) error {
 		return style + s + reset
 	}
 
-	fmt.Fprintf(w, "%s  scanned: %s  duration: %.1fs\n\n",
+	fmt.Fprintf(w, "%s  scanned: %s  duration: %.1fs\n",
 		paint(bold, "kubegrade v"+r.Agent), r.ScannedAt.Format("2006-01-02 15:04:05 UTC"), r.Duration)
+	for _, l := range inventoryLines(r.Inventory) {
+		fmt.Fprintln(w, l)
+	}
+	fmt.Fprintln(w)
 
 	// Banner: block letter left, breakdown right.
 	var banner [5]string

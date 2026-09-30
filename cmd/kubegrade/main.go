@@ -132,7 +132,7 @@ func run(o options, log *slog.Logger) error {
 
 	rep := report.Build(report.Input{
 		Agent: version, Cluster: cluster, ScannedAt: snap.ScannedAt, Duration: time.Since(start),
-		Findings: findings, Result: result, Errors: snap.Errors,
+		Inventory: snap.Inventory(), Findings: findings, Result: result, Errors: snap.Errors,
 	})
 	if o.format == "json" {
 		return report.WriteJSON(os.Stdout, rep)

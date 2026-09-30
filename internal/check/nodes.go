@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -35,14 +36,6 @@ func (kubeletSkew) Run(_ context.Context, s *collect.Snapshot) []Finding {
 
 type kernelEOL struct{}
 
-// shortKernel drops the distro build suffix: "6.12.63+deb13-amd64" -> "6.12.63".
-func shortKernel(v string) string {
-	if i := strings.IndexAny(v, "+"); i >= 0 {
-		return v[:i]
-	}
-	return v
-}
-
 func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
 	for _, n := range s.Nodes {
@@ -50,7 +43,9 @@ func (kernelEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		f := Finding{ID: "kernel-eol", Category: Versions, Resource: "node " + n.Name}
 		k, ok := s.Tables.Kernel.Find(minor(kv))
 		if !ok || !k.LTS {
-			continue // non-LTS: reported on the node-info line
+			f.Severity, f.What = Info, "kernel "+kv+" is not an LTS series, support ends with the next release"
+			out = append(out, f)
+			continue
 		}
 		eol, ok := data.ParseDate(k.EOL)
 		if !ok {
@@ -80,7 +75,9 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		f := Finding{ID: "os-eol", Category: Versions, Resource: "node " + n.Name}
 		d, ok := s.Tables.OS.Match(img)
 		if !ok {
-			continue // unknown OS: reported on the node-info line
+			f.Severity, f.What, f.Fix = Info, img+" not in the OS table, support unknown", "add it in hack/refresh-data"
+			out = append(out, f)
+			continue
 		}
 		eol, ok := data.ParseDate(d.EOL)
 		if !ok || eol.After(s.ScannedAt) {
@@ -92,82 +89,12 @@ func (osEOL) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	return out
 }
 
-// nodeInfo prints what the nodes run. Nodes with identical OS, kernel and
-// runtime share one line, so a uniform cluster is one row and any odd one
-// out stands alone next to its node-drift finding.
-type nodeInfo struct{}
-
-func (nodeInfo) Run(_ context.Context, s *collect.Snapshot) []Finding {
-	type group struct {
-		what  string
-		nodes []string
-	}
-	var order []string
-	groups := map[string]*group{}
-	for _, n := range s.Nodes {
-		ni := n.Status.NodeInfo
-		os := ni.OSImage
-		if _, ok := s.Tables.OS.Match(os); !ok {
-			os += " (not in OS table)"
-		}
-		kernel := "kernel " + shortKernel(ni.KernelVersion)
-		if k, ok := s.Tables.Kernel.Find(minor(ni.KernelVersion)); ok && k.LTS {
-			kernel += " LTS until " + k.EOL
-		} else {
-			kernel += " not LTS"
-		}
-		what := os + ", " + kernel
-		g, ok := groups[what]
-		if !ok {
-			g = &group{what: what}
-			groups[what] = g
-			order = append(order, what)
-		}
-		g.nodes = append(g.nodes, n.Name)
-	}
-	majority := 0
-	for _, g := range groups {
-		majority = max(majority, len(g.nodes))
-	}
-	var out []Finding
-	for _, what := range order {
-		g := groups[what]
-		if len(g.nodes) < majority {
-			continue // odd ones out are reported by node-drift, not twice
-		}
-		res := "node " + g.nodes[0]
-		if len(g.nodes) > 1 {
-			res = fmtInt(len(g.nodes)) + " nodes"
-		}
-		if up := uptime(s, g.nodes); up != "" {
-			what += ", up " + up
-		}
-		out = append(out, Finding{ID: "node-info", Category: Versions, Severity: Info, Resource: res, What: what})
-	}
-	return out
-}
-
 // uptime renders the node uptime, as a range when the group spans several
 // nodes. Empty when the kubelet stats gave no start time.
 func uptime(s *collect.Snapshot, nodes []string) string {
-	var lo, hi time.Duration
-	found := false
-	for _, n := range nodes {
-		t, ok := s.NodeStart[n]
-		if !ok {
-			continue
-		}
-		d := s.ScannedAt.Sub(t)
-		if !found || d < lo {
-			lo = d
-		}
-		if !found || d > hi {
-			hi = d
-		}
-		found = true
-	}
+	lo, hi, ok := uptimeRange(s, nodes)
 	switch {
-	case !found:
+	case !ok:
 		return ""
 	case humanDuration(lo) == humanDuration(hi):
 		return humanDuration(lo)
@@ -176,27 +103,59 @@ func uptime(s *collect.Snapshot, nodes []string) string {
 	}
 }
 
+func uptimeRange(s *collect.Snapshot, nodes []string) (lo, hi time.Duration, ok bool) {
+	for _, n := range nodes {
+		t, found := s.NodeStart[n]
+		if !found {
+			continue
+		}
+		d := s.ScannedAt.Sub(t)
+		if !ok || d < lo {
+			lo = d
+		}
+		if !ok || d > hi {
+			hi = d
+		}
+		ok = true
+	}
+	return lo, hi, ok
+}
+
 // nodeDrift flags nodes whose kernel, OS, kubelet or runtime differs from
 // the majority. Kernel drift is rated by the size of the gap; a long uptime
 // on the odd node means it has been skipping reboots and bumps the
 // severity one level. Skipped on single-node clusters.
 type nodeDrift struct{}
 
-func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
+// driftGroup is one set of nodes sharing a value that is not the cluster's
+// reference for that field: the newest version where values are orderable
+// (ahead), otherwise the majority.
+type driftGroup struct {
+	field    string
+	value    string
+	ref      string
+	ahead    bool
+	nodes    []string
+	refNodes []string
+}
+
+var driftFields = []struct {
+	label     string
+	versioned bool
+	get       func(corev1.NodeSystemInfo) string
+}{
+	{"kernel", true, func(i corev1.NodeSystemInfo) string { return collect.ShortKernel(i.KernelVersion) }},
+	{"OS", false, func(i corev1.NodeSystemInfo) string { return i.OSImage }},
+	{"kubelet", true, func(i corev1.NodeSystemInfo) string { return i.KubeletVersion }},
+	{"runtime", true, func(i corev1.NodeSystemInfo) string { return shortRuntime(i.ContainerRuntimeVersion) }},
+}
+
+func driftGroups(s *collect.Snapshot) []driftGroup {
 	if len(s.Nodes) < 2 {
 		return nil
 	}
-	fields := []struct {
-		label string
-		get   func(corev1.NodeSystemInfo) string
-	}{
-		{"kernel", func(i corev1.NodeSystemInfo) string { return shortKernel(i.KernelVersion) }},
-		{"OS", func(i corev1.NodeSystemInfo) string { return i.OSImage }},
-		{"kubelet", func(i corev1.NodeSystemInfo) string { return i.KubeletVersion }},
-		{"runtime", func(i corev1.NodeSystemInfo) string { return i.ContainerRuntimeVersion }},
-	}
-	var out []Finding
-	for _, f := range fields {
+	var out []driftGroup
+	for _, f := range driftFields {
 		counts := map[string]int{}
 		for _, n := range s.Nodes {
 			counts[f.get(n.Status.NodeInfo)]++
@@ -204,34 +163,158 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if len(counts) < 2 {
 			continue
 		}
-		majority, majorityN := "", 0
-		for v, n := range counts {
-			if n > majorityN || (n == majorityN && v > majority) {
-				majority, majorityN = v, n
-			}
+		ref, ahead := "", false
+		if f.versioned {
+			ref, ahead = newestVersion(counts)
 		}
+		if !ahead {
+			ref = majorityVersion(counts)
+		}
+		var refNodes, order []string
+		groups := map[string]*driftGroup{}
 		for _, n := range s.Nodes {
 			v := f.get(n.Status.NodeInfo)
-			if v == majority {
+			if v == ref {
+				refNodes = append(refNodes, n.Name)
 				continue
 			}
-			what := f.label + " " + v + " differs from " + plural(majorityN, "node") + " on " + majority
-			sev := Low
-			if f.label == "kernel" {
-				sev = kernelGapSeverity(v, majority)
+			g, ok := groups[v]
+			if !ok {
+				g = &driftGroup{field: f.label, value: v, ref: ref, ahead: ahead}
+				groups[v] = g
+				order = append(order, v)
 			}
-			if t, ok := s.NodeStart[n.Name]; ok {
-				up := s.ScannedAt.Sub(t)
-				what += ", up " + humanDuration(up)
-				if up > 30*24*time.Hour {
-					sev = bump(sev)
-				}
-			}
-			out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: sev,
-				Resource: "node " + n.Name, What: what, Fix: "pending reboot or upgrade"})
+			g.nodes = append(g.nodes, n.Name)
+		}
+		for _, v := range order {
+			groups[v].refNodes = refNodes
+			out = append(out, *groups[v])
 		}
 	}
 	return out
+}
+
+// driftedNodes names the nodes in any drift group, or only those of one
+// field. Other node checks use it to leave those nodes to node-drift.
+func driftedNodes(s *collect.Snapshot, field string) map[string]bool {
+	out := map[string]bool{}
+	for _, g := range driftGroups(s) {
+		if field != "" && g.field != field {
+			continue
+		}
+		for _, n := range g.nodes {
+			out[n] = true
+		}
+	}
+	return out
+}
+
+// nodeDrift reports each group of nodes lagging the newest kernel, kubelet
+// or runtime in the cluster as one row; the OS image is not orderable, so
+// there the odd ones out are measured against the majority.
+func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	var out []Finding
+	rebooting := kuredRebooting(s)
+	for _, g := range driftGroups(s) {
+		res := "node " + g.nodes[0]
+		if len(g.nodes) > 1 {
+			res = fmtInt(len(g.nodes)) + " nodes"
+		}
+		peers := plural(len(g.refNodes), "node")
+		what, fix := g.field+" "+g.value+" differs from "+peers+" on "+g.ref, "pending reboot or upgrade"
+		if g.ahead {
+			what = g.field + " " + g.value + ", " + peers + " already on " + g.ref
+			if _, hi, ok := uptimeRange(s, g.refNodes); ok {
+				what += " for " + humanDuration(hi)
+			}
+			fix = "upgrade " + g.field + " to " + g.ref
+			if g.field == "kernel" {
+				fix = "reboot onto " + g.ref
+			}
+		}
+		sev := Low
+		if g.field == "kernel" {
+			sev = kernelGapSeverity(g.value, g.ref)
+		}
+		if _, hi, ok := uptimeRange(s, g.nodes); ok {
+			what += ", up " + uptime(s, g.nodes)
+			if hi > 30*24*time.Hour {
+				sev = bump(sev)
+			}
+		}
+		if (g.field == "kernel" || g.field == "OS") && len(rebooting) > 0 {
+			what += ", kured rebooting " + strings.Join(rebooting, ", ")
+		}
+		out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: sev, Count: min(len(g.nodes), 3),
+			Resource: res, What: what, Fix: fix})
+	}
+	return out
+}
+
+// kuredRebooting names the nodes kured is rebooting right now. Kured holds
+// a lock as a JSON annotation on its own DaemonSet while a node reboots
+// and deletes it afterwards; with --concurrency the value lists several.
+func kuredRebooting(s *collect.Snapshot) []string {
+	var out []string
+	for _, d := range s.DaemonSets {
+		raw, ok := d.Annotations["weave.works/kured-node-lock"]
+		if !ok {
+			continue
+		}
+		var lock struct {
+			NodeID string `json:"nodeID"`
+			Locks  []struct {
+				NodeID string `json:"nodeID"`
+			} `json:"locks"`
+		}
+		if json.Unmarshal([]byte(raw), &lock) != nil {
+			continue
+		}
+		if lock.NodeID != "" {
+			out = append(out, lock.NodeID)
+		}
+		for _, l := range lock.Locks {
+			if l.NodeID != "" {
+				out = append(out, l.NodeID)
+			}
+		}
+	}
+	return out
+}
+
+// newestVersion is the highest parseable version; false when any value
+// does not parse, so the caller falls back to the majority.
+func newestVersion(counts map[string]int) (string, bool) {
+	best, ok := "", false
+	var bestV data.Version
+	for v := range counts {
+		pv, parsed := data.ParseVersion(v)
+		if !parsed {
+			return "", false
+		}
+		if !ok || bestV.Less(pv) {
+			best, bestV, ok = v, pv, true
+		}
+	}
+	return best, ok
+}
+
+func majorityVersion(counts map[string]int) string {
+	majority, majorityN := "", 0
+	for v, n := range counts {
+		if n > majorityN || (n == majorityN && v > majority) {
+			majority, majorityN = v, n
+		}
+	}
+	return majority
+}
+
+// shortRuntime drops the scheme: "containerd://2.0.5" -> "2.0.5".
+func shortRuntime(v string) string {
+	if i := strings.Index(v, "://"); i >= 0 {
+		return v[i+3:]
+	}
+	return v
 }
 
 // kernelGapSeverity: a different major.minor series is a different LTS
@@ -366,11 +449,14 @@ type nodeUptime struct{}
 // few kernel security releases on every distro; four months is certain.
 // When the running kernel carries the upstream patch level, a newer
 // release in its series that is old enough to be packaged is named.
+// Nodes behind a peer's kernel are node-drift's, which says what to catch
+// up to; this check covers the case where every node is equally stale.
 func (nodeUptime) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var out []Finding
+	behind := driftedNodes(s, "kernel")
 	for _, n := range s.Nodes {
 		start, ok := s.NodeStart[n.Name]
-		if !ok {
+		if !ok || behind[n.Name] {
 			continue
 		}
 		up := s.ScannedAt.Sub(start)
@@ -397,7 +483,7 @@ func (nodeUptime) Run(_ context.Context, s *collect.Snapshot) []Finding {
 // kernels (Ubuntu 6.8.0-45, RHEL 5.14.0-427) carry no upstream patch level
 // and are skipped; their patch number is always zero.
 func newerKernel(s *collect.Snapshot, kernelVersion string) (version, date string) {
-	running, ok := data.ParseVersion(shortKernel(kernelVersion))
+	running, ok := data.ParseVersion(collect.ShortKernel(kernelVersion))
 	if !ok || running.Patch == 0 {
 		return "", ""
 	}

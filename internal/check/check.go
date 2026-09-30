@@ -75,7 +75,6 @@ func All() []entry {
 		{"kernel-eol", Versions, "nodes", "kernels within support", kernelEOL{}},
 		{"os-eol", Versions, "nodes", "os releases within support", osEOL{}},
 		{"node-drift", Hygiene, "nodes", "kernel, os, kubelet and runtime in sync", nodeDrift{}},
-		{"node-info", Versions, "", "", nodeInfo{}},
 		{"node-notready", Health, "nodes", "all ready", nodeNotReady{}},
 		{"pod-crashloop", Health, "pods", "no crash loops", crashLoop{}},
 		{"pod-restarts", Health, "pods", "no frequent restarts", podRestarts{}},

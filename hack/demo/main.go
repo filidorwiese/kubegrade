@@ -10,6 +10,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/filidorwiese/kubegrade/internal/check"
+	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/grade"
 	"github.com/filidorwiese/kubegrade/internal/report"
 )
@@ -26,8 +27,6 @@ func main() {
 		{ID: "image-outdated", Category: check.Versions, Severity: check.Info, Resource: "image phpmyadmin:5.2.1",
 			What: "patch 5.2.3 available, used by deploy tools/phpmyadmin", Fix: "bump tag to 5.2.3",
 			Link: "https://hub.docker.com/_/phpmyadmin"},
-		{ID: "node-info", Category: check.Versions, Severity: check.Info, Resource: "4 nodes",
-			What: "Debian GNU/Linux 13 (trixie), kernel 6.12.107 LTS until 2028-12-31, up 3d to 12d"},
 		{ID: "image-tag-latest", Category: check.Hygiene, Severity: check.Low, Resource: "image checkout-api:latest",
 			What: "used by deploy shop/checkout-api", Fix: "pin a version tag"},
 		{ID: "node-drift", Category: check.Hygiene, Severity: check.High, Resource: "node worker-2",
@@ -40,6 +39,9 @@ func main() {
 	r := report.Build(report.Input{
 		Agent: "0.1.0", Cluster: "demo", ScannedAt: time.Date(2026, 9, 28, 14, 0, 12, 0, time.UTC),
 		Duration: 5300 * time.Millisecond, Findings: findings, Result: grade.Compute(findings),
+		Inventory: collect.Inventory{Version: "v1.34.4+k3s1", ControlPlane: 1, Workers: 3,
+			OS:      []collect.Count{{Value: "Debian GNU/Linux 13 (trixie)", Nodes: 4}},
+			Kernels: []collect.Count{{Value: "6.12.107", Nodes: 3}, {Value: "6.12.63", Nodes: 1}}},
 	})
 	// Same width rule as the real run so the sample lays out identically.
 	width, _, err := term.GetSize(int(os.Stdout.Fd()))

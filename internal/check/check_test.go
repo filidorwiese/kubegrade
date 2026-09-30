@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -321,8 +322,9 @@ func node(name, kernel, os string) corev1.Node {
 	return n
 }
 
-// The odd node out is reported against the majority; a different kernel
-// series is high, and a long uptime bumps the severity one level.
+// Nodes behind the newest kernel are one row per version; a different
+// kernel series is high, and a long uptime bumps the severity one level.
+// The OS image is compared against the majority.
 func TestNodeDrift(t *testing.T) {
 	s := snap()
 	s.Nodes = []corev1.Node{
@@ -332,26 +334,70 @@ func TestNodeDrift(t *testing.T) {
 		node("d", "6.6.10", "Debian 12"),
 	}
 	s.NodeStart["d"] = now.Add(-40 * 24 * time.Hour)
-	got := map[string]Severity{}
+	got := map[string]Finding{}
 	for _, f := range run(nodeDrift{}, s) {
-		got[f.Resource+" "+f.What[:min(len(f.What), 6)]] = f.Severity
+		got[f.Resource+" "+f.What[:min(len(f.What), 6)]] = f
 	}
-	want := map[string]Severity{
-		"node c kernel": Medium,   // 27 patches behind
-		"node d kernel": Critical, // other series, bumped by uptime
-		"node d OS Deb": Medium,   // low, bumped by uptime
+	want := map[string]struct {
+		sev  Severity
+		what string
+	}{
+		"node c kernel": {Medium, "kernel 6.12.80, 2 nodes already on 6.12.107"},            // 27 patches behind
+		"node d kernel": {Critical, "kernel 6.6.10, 2 nodes already on 6.12.107, up 40d"},   // other series, bumped by uptime
+		"node d OS Deb": {Medium, "OS Debian 12 differs from 3 nodes on Debian 13, up 40d"}, // low, bumped by uptime
 	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%s: %q, want %q (all: %v)", k, got[k], v, got)
+	for k, w := range want {
+		if f := got[k]; f.Severity != w.sev || f.What != w.what {
+			t.Errorf("%s: %q %q, want %q %q", k, f.Severity, f.What, w.sev, w.what)
 		}
 	}
 	if len(got) != 3 {
 		t.Errorf("got %d findings: %v", len(got), got)
 	}
+	if got["node c kernel"].Fix != "reboot onto 6.12.107" {
+		t.Errorf("fix: %q", got["node c kernel"].Fix)
+	}
 	s.Nodes = s.Nodes[:1]
 	if fs := run(nodeDrift{}, s); len(fs) != 0 {
 		t.Error("single node cannot drift")
+	}
+}
+
+// One freshly rebooted node on a newer kernel means the others are behind,
+// not the new one. They share a row, and a held kured lock names the node
+// being rebooted.
+func TestNodeDriftNewest(t *testing.T) {
+	s := snap()
+	s.Nodes = []corev1.Node{
+		node("old1", "6.12.107", "Debian 13"), node("old2", "6.12.107", "Debian 13"), node("new", "6.12.111", "Debian 13"),
+	}
+	s.Nodes[2].Status.NodeInfo.ContainerRuntimeVersion = "containerd://2.1"
+	s.NodeStart["new"] = now.Add(-4 * time.Hour)
+	s.NodeStart["old1"] = now.Add(-12 * 24 * time.Hour)
+	s.NodeStart["old2"] = now.Add(-13 * 24 * time.Hour)
+
+	fs := run(nodeDrift{}, s)
+	if len(fs) != 2 {
+		t.Fatalf("got %d findings: %+v", len(fs), fs)
+	}
+	k := fs[0]
+	if k.Resource != "2 nodes" || k.Severity != Low || k.Count != 2 || k.Fix != "reboot onto 6.12.111" ||
+		k.What != "kernel 6.12.107, 1 node already on 6.12.111 for 4h, up 12d to 13d" {
+		t.Errorf("kernel: %+v", k)
+	}
+	if r := fs[1]; r.What != "runtime 2.0, 1 node already on 2.1 for 4h, up 12d to 13d" || r.Fix != "upgrade runtime to 2.1" {
+		t.Errorf("runtime: %+v", r)
+	}
+
+	s.DaemonSets = []appsv1.DaemonSet{{ObjectMeta: metav1.ObjectMeta{Name: "kured", Namespace: "kube-system",
+		Annotations: map[string]string{"weave.works/kured-node-lock": `{"nodeID":"old2","created":"2026-09-30T08:00:00Z"}`}}}}
+	fs = run(nodeDrift{}, s)
+	if !strings.HasSuffix(fs[0].What, ", kured rebooting old2") || strings.Contains(fs[1].What, "kured") {
+		t.Errorf("kured lock: %q / %q", fs[0].What, fs[1].What)
+	}
+	s.DaemonSets[0].Annotations["weave.works/kured-node-lock"] = `{"maxOwners":2,"locks":[{"nodeID":"old1"},{"nodeID":"old2"}]}`
+	if fs = run(nodeDrift{}, s); !strings.HasSuffix(fs[0].What, ", kured rebooting old1, old2") {
+		t.Errorf("multi lock: %q", fs[0].What)
 	}
 }
 
@@ -431,9 +477,14 @@ func TestNodeUptime(t *testing.T) {
 	for name, days := range map[string]int{"fresh": 10, "month": 40, "stale": 40, "ubuntu": 40, "recent-release": 40, "long": 130} {
 		s.NodeStart[name] = now.AddDate(0, 0, -days)
 	}
+	// Each node scanned alone: with peers, a lagging kernel is drift's.
 	got := map[string]Finding{}
-	for _, f := range run(nodeUptime{}, s) {
-		got[f.Resource] = f
+	for _, n := range s.Nodes {
+		one := *s
+		one.Nodes = []corev1.Node{n}
+		for _, f := range run(nodeUptime{}, &one) {
+			got[f.Resource] = f
+		}
 	}
 	want := map[string]struct {
 		sev  Severity
@@ -452,5 +503,14 @@ func TestNodeUptime(t *testing.T) {
 		if f := got[res]; f.Severity != w.sev || f.What != w.what {
 			t.Errorf("%s: %q %q, want %q %q", res, f.Severity, f.What, w.sev, w.what)
 		}
+	}
+	// Together, only nodes on the newest kernel are this check's; the rest
+	// are reported by node-drift with the version to catch up to.
+	var together []string
+	for _, f := range run(nodeUptime{}, s) {
+		together = append(together, f.Resource)
+	}
+	if strings.Join(together, ",") != "node month,node long" {
+		t.Errorf("with peers: %v", together)
 	}
 }
