@@ -93,12 +93,13 @@ func shortImage(img string) string {
 type imageOutdated struct{}
 
 // imageOutdated compares each Docker Hub image tag against the newest tag
-// of the same shape. Helm-managed workloads are the chart's concern.
+// of the same shape. Helm-managed workloads are the chart's concern and
+// k3s-bundled ones follow the k3s version.
 func (imageOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	var order []string
 	users := map[string][]string{}
 	for _, w := range s.Workloads() {
-		if w.Helm {
+		if w.Helm || w.Namespace == "kube-system" && k3sBundled[w.Name] {
 			continue
 		}
 		for _, img := range w.Images() {

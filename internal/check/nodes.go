@@ -195,7 +195,7 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		peers := plural(len(g.refNodes), "node")
 		what, fix := g.field+" "+g.value+" differs from "+peers+" on "+g.ref, "pending reboot or upgrade"
 		if g.ahead {
-			what = g.field + " " + g.value + ", " + peers + " already on " + g.ref
+			what = g.field + " " + g.value + " version drift, " + peers + " already on " + g.ref
 			if _, hi, ok := uptimeRange(s, g.refNodes); ok {
 				what += " for " + humanDuration(hi)
 			}
@@ -211,7 +211,7 @@ func (nodeDrift) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if (g.field == "kernel" || g.field == "OS") && len(rebooting) > 0 {
 			what += ", kured rebooting " + strings.Join(rebooting, ", ")
 		}
-		out = append(out, Finding{ID: "node-drift", Category: Hygiene, Severity: sev, Count: min(len(g.nodes), 3),
+		out = append(out, Finding{ID: "node-drift", Category: Versions, Severity: sev, Count: min(len(g.nodes), 3),
 			Resource: res, What: what, Fix: fix})
 	}
 	return out

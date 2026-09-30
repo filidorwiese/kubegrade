@@ -74,7 +74,7 @@ func All() []entry {
 		{"kubelet-skew", Versions, "nodes", "kubelet versions match the api server", kubeletSkew{}},
 		{"kernel-eol", Versions, "nodes", "kernels within support", kernelEOL{}},
 		{"os-eol", Versions, "nodes", "os releases within support", osEOL{}},
-		{"node-drift", Hygiene, "nodes", "kernel, os, kubelet and runtime in sync", nodeDrift{}},
+		{"node-drift", Versions, "nodes", "kernel, os, kubelet and runtime in sync", nodeDrift{}},
 		{"node-notready", Health, "nodes", "all ready", nodeNotReady{}},
 		{"pod-crashloop", Health, "pods", "no crash loops", crashLoop{}},
 		{"pod-restarts", Health, "pods", "no frequent restarts", podRestarts{}},

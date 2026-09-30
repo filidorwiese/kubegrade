@@ -111,16 +111,19 @@ func TestNewerTag(t *testing.T) {
 	}
 }
 
-func TestImageOutdatedSkipsHelm(t *testing.T) {
+func TestImageOutdatedSkipsHelmAndBundled(t *testing.T) {
 	s := snap()
 	helm := appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "web", Name: "chart",
 		Labels: map[string]string{"app.kubernetes.io/managed-by": "Helm"}}}
 	helm.Spec.Template.Spec.Containers = []corev1.Container{{Image: "phpmyadmin:5.2.1"}}
 	sts := appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Namespace: "db", Name: "pma"}}
 	sts.Spec.Template.Spec.Containers = []corev1.Container{{Image: "docker.io/phpmyadmin:5.2.1@sha256:abc"}}
-	s.Deployments = []appsv1.Deployment{helm}
+	bundled := appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "coredns"}}
+	bundled.Spec.Template.Spec.Containers = []corev1.Container{{Image: "rancher/mirrored-coredns-coredns:1.14.3"}}
+	s.Deployments = []appsv1.Deployment{helm, bundled}
 	s.StatefulSets = []appsv1.StatefulSet{sts}
-	s.ImageTags = map[string][]string{"library/phpmyadmin": {"5.2.2", "5.2.2-apache"}}
+	s.ImageTags = map[string][]string{"library/phpmyadmin": {"5.2.2", "5.2.2-apache"},
+		"rancher/mirrored-coredns-coredns": {"1.14.7"}}
 
 	fs := run(imageOutdated{}, s)
 	if len(fs) != 1 {
@@ -341,8 +344,8 @@ func TestNodeDrift(t *testing.T) {
 		sev  Severity
 		what string
 	}{
-		"node c kernel": {Medium, "kernel 6.12.80, 2 nodes already on 6.12.107"}, // 27 patches behind
-		"node d kernel": {High, "kernel 6.6.10, 2 nodes already on 6.12.107"},    // other series
+		"node c kernel": {Medium, "kernel 6.12.80 version drift, 2 nodes already on 6.12.107"}, // 27 patches behind
+		"node d kernel": {High, "kernel 6.6.10 version drift, 2 nodes already on 6.12.107"},    // other series
 		"node d OS Deb": {Low, "OS Debian 12 differs from 3 nodes on Debian 13"},
 	}
 	for k, w := range want {
@@ -381,10 +384,10 @@ func TestNodeDriftNewest(t *testing.T) {
 	}
 	k := fs[0]
 	if k.Resource != "2 nodes" || k.Severity != Low || k.Count != 2 || k.Fix != "reboot onto 6.12.111" ||
-		k.What != "kernel 6.12.107, 1 node already on 6.12.111 for 4h" {
+		k.What != "kernel 6.12.107 version drift, 1 node already on 6.12.111 for 4h" {
 		t.Errorf("kernel: %+v", k)
 	}
-	if r := fs[1]; r.What != "runtime 2.0, 1 node already on 2.1 for 4h" || r.Fix != "upgrade runtime to 2.1" {
+	if r := fs[1]; r.What != "runtime 2.0 version drift, 1 node already on 2.1 for 4h" || r.Fix != "upgrade runtime to 2.1" {
 		t.Errorf("runtime: %+v", r)
 	}
 
