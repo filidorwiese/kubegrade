@@ -308,16 +308,18 @@ func shortRuntime(v string) string {
 
 // kernelGapSeverity: a different major.minor series is a different LTS
 // branch (high); within a series, patch releases land about weekly, so
-// more than 20 behind is months of missed fixes (medium).
+// more than 20 behind is months of missed fixes (medium). Ubuntu keeps the
+// patch at 0 and bumps its ABI counter every few weeks instead.
 func kernelGapSeverity(have, want string) Severity {
-	a, okA := data.ParseVersion(have)
-	b, okB := data.ParseVersion(want)
+	a, b := collect.VersionNums(have), collect.VersionNums(want)
 	switch {
-	case !okA || !okB:
+	case len(a) < 2 || len(b) < 2:
 		return Low
-	case a.Major != b.Major || a.Minor != b.Minor:
+	case a[0] != b[0] || a[1] != b[1]:
 		return High
-	case b.Patch-a.Patch > 20:
+	case len(a) > 2 && len(b) > 2 && b[2]-a[2] > 20:
+		return Medium
+	case len(a) > 3 && len(b) > 3 && b[3]-a[3] > 7:
 		return Medium
 	}
 	return Low
@@ -479,7 +481,7 @@ func (kernelUpdate) Run(_ context.Context, s *collect.Snapshot) []Finding {
 		if kured {
 			fix += " or wait for kured"
 		}
-		out = append(out, Finding{ID: "kernel-update", Category: Versions, Severity: Low, Count: min(len(nodes), 3),
+		out = append(out, Finding{ID: "kernel-update", Category: Versions, Severity: kernelGapSeverity(k.have, k.latest), Count: min(len(nodes), 3),
 			Resource: res, What: what, Fix: fix})
 	}
 	return out

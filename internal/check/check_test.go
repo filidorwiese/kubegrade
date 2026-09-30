@@ -479,21 +479,27 @@ func TestKernelUpdate(t *testing.T) {
 	s.Nodes = []corev1.Node{
 		node("old1", "6.12.107+deb13-amd64", "Debian 13"), node("old2", "6.12.107+deb13-amd64", "Debian 13"),
 		node("new", "6.12.111+deb13-amd64", "Debian 13"), node("ubu", "6.8.0-131-generic", "Ubuntu 24.04"),
+		node("stale", "6.12.63+deb13-amd64", "Debian 13"), node("ancient", "6.1.140+deb12-amd64", "Debian 12"),
 	}
 	deb := collect.KernelUpdate{Have: "6.12.107", Latest: "6.12.111", Source: "trixie-security"}
 	s.KernelLatest = map[string]collect.KernelUpdate{"old1": deb, "old2": deb,
-		"ubu": {Have: "6.8.0-131", Latest: "6.8.0-142", Source: "noble security"}}
+		"ubu":     {Have: "6.8.0-131", Latest: "6.8.0-142", Source: "noble security"},
+		"stale":   {Have: "6.12.63", Latest: "6.12.111", Source: "trixie-security"},
+		"ancient": {Have: "6.1.140", Latest: "6.12.111", Source: "trixie-security"}}
 
 	fs := run(kernelUpdate{}, s)
-	if len(fs) != 2 {
+	if len(fs) != 4 {
 		t.Fatalf("got %+v", fs)
+	}
+	if fs[2].Severity != Medium || fs[3].Severity != High {
+		t.Errorf("gap severity: %q %q", fs[2].Severity, fs[3].Severity)
 	}
 	if f := fs[0]; f.Resource != "nodes old1, old2" || f.Count != 2 || f.Severity != Low ||
 		f.What != "kernel 6.12.107, 6.12.111 available in trixie-security, 1 node already on it" ||
 		f.Fix != "upgrade and reboot onto 6.12.111" {
 		t.Errorf("debian: %+v", f)
 	}
-	if f := fs[1]; f.Resource != "node ubu" || f.What != "kernel 6.8.0-131, 6.8.0-142 available in noble security" {
+	if f := fs[1]; f.Resource != "node ubu" || f.Severity != Medium || f.What != "kernel 6.8.0-131, 6.8.0-142 available in noble security" {
 		t.Errorf("ubuntu: %+v", f)
 	}
 	for _, f := range run(nodeDrift{}, s) {

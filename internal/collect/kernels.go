@@ -215,13 +215,13 @@ func ubuntuPackage(feed *feedCache, pkg, series, arch string) (*KernelUpdate, er
 
 // sameSeries is true when both versions share major.minor.
 func sameSeries(a, b string) bool {
-	na, nb := versionNums(a), versionNums(b)
+	na, nb := VersionNums(a), VersionNums(b)
 	return len(na) >= 2 && len(nb) >= 2 && na[0] == nb[0] && na[1] == nb[1]
 }
 
-// versionNums splits "6.8.0-142" into its numbers; anything after the
+// VersionNums splits "6.8.0-142" into its numbers; anything after the
 // first character that is neither digit nor separator is ignored.
-func versionNums(v string) []int {
+func VersionNums(v string) []int {
 	var out []int
 	num := ""
 	flush := func() {
@@ -252,7 +252,7 @@ func lessVersion(a, b string) bool {
 	if a == "" {
 		return b != ""
 	}
-	na, nb := versionNums(a), versionNums(b)
+	na, nb := VersionNums(a), VersionNums(b)
 	for i := 0; i < max(len(na), len(nb)); i++ {
 		x, y := 0, 0
 		if i < len(na) {
