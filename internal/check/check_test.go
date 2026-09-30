@@ -86,19 +86,50 @@ func TestK8sVersion(t *testing.T) {
 	}
 }
 
-func TestParseImage(t *testing.T) {
-	cases := map[string]imageRef{
-		"nginx":                         {},
-		"nginx:1.27":                    {tag: "1.27"},
-		"registry:5000/app":             {},
-		"registry:5000/app:latest":      {tag: "latest"},
-		"ghcr.io/org/app:v1@sha256:abc": {tag: "v1", digest: "sha256:abc"},
-		"ghcr.io/org/app@sha256:abc":    {digest: "sha256:abc"},
+func TestNewerTag(t *testing.T) {
+	tags := []string{"latest", "6", "5.2.2", "5.2.2-apache", "5.10", "5.9", "5.2", "5", "fpm", "abc"}
+	cases := []struct {
+		cur, want string
+		seg       int
+	}{
+		{"5.2.1", "5.2.2", 2},
+		{"5.2.1-apache", "5.2.2-apache", 2},
+		{"5.2.1-fpm", "", 0},  // no such variant upstream
+		{"5.9", "5.10", 1},    // numeric, not lexical
+		{"5", "6", 0},         // floating major only moves on a major
+		{"6.0.0", "", 0},      // current
+		{"fpm", "", 0},        // no digits, nothing to compare
+		{"4.9.9", "5.2.2", 0}, // same shape only, 5.10 is #.#
+		{"4.9", "5.10", 0},
 	}
-	for img, want := range cases {
-		if got := parseImage(img); got != want {
-			t.Errorf("%s: %+v, want %+v", img, got, want)
+	for _, c := range cases {
+		got, seg, ok := newerTag(c.cur, tags)
+		if got != c.want || (ok && seg != c.seg) {
+			t.Errorf("%s: got %q seg %d, want %q seg %d", c.cur, got, seg, c.want, c.seg)
 		}
+	}
+}
+
+func TestImageOutdatedSkipsHelm(t *testing.T) {
+	s := snap()
+	helm := appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "web", Name: "chart",
+		Labels: map[string]string{"app.kubernetes.io/managed-by": "Helm"}}}
+	helm.Spec.Template.Spec.Containers = []corev1.Container{{Image: "phpmyadmin:5.2.1"}}
+	sts := appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Namespace: "db", Name: "pma"}}
+	sts.Spec.Template.Spec.Containers = []corev1.Container{{Image: "docker.io/phpmyadmin:5.2.1@sha256:abc"}}
+	s.Deployments = []appsv1.Deployment{helm}
+	s.StatefulSets = []appsv1.StatefulSet{sts}
+	s.ImageTags = map[string][]string{"library/phpmyadmin": {"5.2.2", "5.2.2-apache"}}
+
+	fs := run(imageOutdated{}, s)
+	if len(fs) != 1 {
+		t.Fatalf("got %+v, want one finding", fs)
+	}
+	if fs[0].Fix != "bump tag and digest to 5.2.2" || fs[0].What != "patch 5.2.2 available, used by sts db/pma" {
+		t.Errorf("got %q / %q", fs[0].What, fs[0].Fix)
+	}
+	if fs[0].Link != "https://hub.docker.com/_/phpmyadmin" {
+		t.Errorf("link: %q", fs[0].Link)
 	}
 }
 
@@ -125,7 +156,7 @@ func TestImageTagsDedupePerImage(t *testing.T) {
 	if len(latest) != 2 {
 		t.Fatalf("got %d findings, want 2 (one per image): %+v", len(latest), latest)
 	}
-	if latest[0].Resource != "image nginx:latest" || latest[0].What != "used by deploy web/app, web/api" {
+	if latest[0].Resource != "image nginx:latest" || latest[0].What != "used by deploy web/app, deploy web/api" {
 		t.Errorf("nginx: %q / %q", latest[0].Resource, latest[0].What)
 	}
 	if latest[1].Resource != "image redis" || latest[1].What != "used by deploy cache/redis" {

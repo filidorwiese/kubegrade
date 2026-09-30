@@ -45,7 +45,7 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	s := &Snapshot{ScannedAt: time.Now().UTC(), Tables: c.tables}
 	all := metav1.ListOptions{}
 	const phase = "collecting cluster data"
-	step, total := 0, 11
+	step, total := 0, 14
 	tick := func() {
 		step++
 		c.report(phase, step, total)
@@ -80,6 +80,20 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	s.Deployments = deps.Items
 	tick()
 
+	stss, err := c.cs.AppsV1().StatefulSets("").List(ctx, all)
+	if err != nil {
+		return nil, fmt.Errorf("list statefulsets: %w", err)
+	}
+	s.StatefulSets = stss.Items
+	tick()
+
+	dss, err := c.cs.AppsV1().DaemonSets("").List(ctx, all)
+	if err != nil {
+		return nil, fmt.Errorf("list daemonsets: %w", err)
+	}
+	s.DaemonSets = dss.Items
+	tick()
+
 	rss, err := c.cs.AppsV1().ReplicaSets("").List(ctx, all)
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets: %w", err)
@@ -110,6 +124,8 @@ func (c *Collector) Collect(ctx context.Context) (*Snapshot, error) {
 	c.try(s, "certificates", func() error { return c.certificates(ctx, s) })
 	tick()
 	c.try(s, "chart upstream", func() error { return c.chartUpstream(ctx, s) })
+	tick()
+	c.try(s, "image upstream", func() error { return c.imageUpstream(ctx, s) })
 	return s, nil
 }
 

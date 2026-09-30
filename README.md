@@ -14,7 +14,7 @@ Every finding deducts points by severity. The overall grade is capped by the
 weakest category.
 
 Note: nothing about the cluster leaves your machine; version data comes from
-[endoflife.date](https://endoflife.date) and [Artifact Hub](https://artifacthub.io).
+[endoflife.date](https://endoflife.date) and [Artifact Hub](https://artifacthub.io) and [Docker Hub](https://hub.docker.com).
 
 ## Install
 

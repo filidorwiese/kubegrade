@@ -16,12 +16,14 @@ type Snapshot struct {
 	ScannedAt     time.Time
 	ServerVersion string // e.g. "v1.34.4+k3s1"
 
-	Nodes       []corev1.Node
-	Pods        []corev1.Pod
-	Deployments []appsv1.Deployment
-	ReplicaSets []appsv1.ReplicaSet
-	Jobs        []batchv1.Job
-	PVCs        []corev1.PersistentVolumeClaim
+	Nodes        []corev1.Node
+	Pods         []corev1.Pod
+	Deployments  []appsv1.Deployment
+	StatefulSets []appsv1.StatefulSet
+	DaemonSets   []appsv1.DaemonSet
+	ReplicaSets  []appsv1.ReplicaSet
+	Jobs         []batchv1.Job
+	PVCs         []corev1.PersistentVolumeClaim
 
 	HelmReleases []HelmRelease
 	VolumeStats  []VolumeStat
@@ -34,6 +36,8 @@ type Snapshot struct {
 	CertIssues []CertIssue
 	// ChartLatest is chart name -> newest stable upstream version.
 	ChartLatest map[string]ChartUpstream
+	// ImageTags is Docker Hub repo -> newest-pushed tags, first page only.
+	ImageTags map[string][]string
 
 	// Tables are the EOL tables used for this scan.
 	Tables *data.Tables

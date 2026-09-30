@@ -2,10 +2,9 @@ package check
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
-
-	appsv1 "k8s.io/api/apps/v1"
 
 	"github.com/filidorwiese/kubegrade/internal/collect"
 	"github.com/filidorwiese/kubegrade/internal/data"
@@ -45,25 +44,25 @@ type imageTags struct{}
 
 func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	noDigest := 0
-	// One finding per unpinned image, not per deployment: the same
+	// One finding per unpinned image, not per workload: the same
 	// nginx:latest in five places is one thing to fix.
 	var order []string
 	users := map[string][]string{}
-	for _, d := range s.Deployments {
-		if d.Namespace == "kube-system" && k3sBundled[d.Name] {
+	for _, w := range s.Workloads() {
+		if w.Namespace == "kube-system" && k3sBundled[w.Name] {
 			continue
 		}
 		tagOnly := false
-		for _, img := range images(d) {
-			ref := parseImage(img)
-			if ref.digest == "" {
+		for _, img := range w.Images() {
+			ref := collect.ParseImage(img)
+			if ref.Digest == "" {
 				tagOnly = true
 			}
-			if ref.digest == "" && (ref.tag == "" || ref.tag == "latest") {
+			if ref.Digest == "" && (ref.Tag == "" || ref.Tag == "latest") {
 				if _, seen := users[img]; !seen {
 					order = append(order, img)
 				}
-				users[img] = append(users[img], d.Namespace+"/"+d.Name)
+				users[img] = append(users[img], w.Kind+" "+w.Namespace+"/"+w.Name)
 			}
 		}
 		if tagOnly {
@@ -74,22 +73,11 @@ func (imageTags) Run(_ context.Context, s *collect.Snapshot) []Finding {
 	for _, img := range order {
 		out = append(out, Finding{ID: "image-tag-latest", Category: Hygiene, Severity: Low,
 			Resource: "image " + shortImage(img),
-			What:     "used by deploy " + strings.Join(users[img], ", "), Fix: "pin a version tag"})
+			What:     "used by " + strings.Join(users[img], ", "), Fix: "pin a version tag"})
 	}
 	if noDigest > 0 {
 		out = append(out, Finding{ID: "image-no-digest", Category: Hygiene, Severity: Info,
-			Resource: "deployments", What: "images by tag without digest: " + plural(noDigest, "deployment")})
-	}
-	return out
-}
-
-func images(d appsv1.Deployment) []string {
-	var out []string
-	for _, c := range d.Spec.Template.Spec.InitContainers {
-		out = append(out, c.Image)
-	}
-	for _, c := range d.Spec.Template.Spec.Containers {
-		out = append(out, c.Image)
+			Resource: "workloads", What: "images by tag without digest: " + plural(noDigest, "workload")})
 	}
 	return out
 }
@@ -102,21 +90,122 @@ func shortImage(img string) string {
 	return img
 }
 
-type imageRef struct{ tag, digest string }
+type imageOutdated struct{}
 
-// parseImage splits registry/name[:tag][@digest]. A colon before the last
-// slash belongs to a registry port, not a tag.
-func parseImage(img string) imageRef {
-	var ref imageRef
-	if i := strings.Index(img, "@"); i >= 0 {
-		ref.digest = img[i+1:]
-		img = img[:i]
+// imageOutdated compares each Docker Hub image tag against the newest tag
+// of the same shape. Helm-managed workloads are the chart's concern.
+func (imageOutdated) Run(_ context.Context, s *collect.Snapshot) []Finding {
+	var order []string
+	users := map[string][]string{}
+	for _, w := range s.Workloads() {
+		if w.Helm {
+			continue
+		}
+		for _, img := range w.Images() {
+			if _, seen := users[img]; !seen {
+				order = append(order, img)
+			}
+			users[img] = append(users[img], w.Kind+" "+w.Namespace+"/"+w.Name)
+		}
 	}
-	slash := strings.LastIndex(img, "/")
-	if colon := strings.LastIndex(img, ":"); colon > slash {
-		ref.tag = img[colon+1:]
+	var out []Finding
+	for _, img := range order {
+		ref := collect.ParseImage(img)
+		tags, ok := s.ImageTags[ref.HubRepo]
+		if !ok {
+			continue
+		}
+		newest, seg, ok := newerTag(ref.Tag, tags)
+		if !ok {
+			continue
+		}
+		f := Finding{ID: "image-outdated", Category: Versions, Resource: "image " + shortImage(img),
+			Fix: "bump tag to " + newest, Link: hubLink(ref.HubRepo)}
+		if ref.Digest != "" {
+			f.Fix = "bump tag and digest to " + newest
+		}
+		by := ", used by " + strings.Join(users[img], ", ")
+		switch seg {
+		case 0:
+			f.Severity = Medium
+			f.What = "major " + newest + " available" + by
+		case 1:
+			f.Severity = Low
+			f.What = "minor " + newest + " available" + by
+		default:
+			f.Severity = Info
+			f.What = "patch " + newest + " available" + by
+		}
+		out = append(out, f)
 	}
-	return ref
+	return out
+}
+
+func hubLink(repo string) string {
+	if name, ok := strings.CutPrefix(repo, "library/"); ok {
+		return "https://hub.docker.com/_/" + name
+	}
+	return "https://hub.docker.com/r/" + repo
+}
+
+// tagParts splits "5.2.1-apache" into its numbers and a shape "#.#.#-apache".
+// Tags of equal shape are the same variant and compare numerically.
+func tagParts(tag string) (nums []int, shape string, ok bool) {
+	var b strings.Builder
+	for i := 0; i < len(tag); {
+		if tag[i] < '0' || tag[i] > '9' {
+			b.WriteByte(tag[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(tag) && tag[j] >= '0' && tag[j] <= '9' {
+			j++
+		}
+		n, err := strconv.Atoi(tag[i:j])
+		if err != nil {
+			return nil, "", false
+		}
+		nums = append(nums, n)
+		b.WriteByte('#')
+		i = j
+	}
+	return nums, b.String(), len(nums) > 0
+}
+
+// newerTag returns the highest same-shape tag above cur and the index of
+// the first segment that differs: 0 is a major bump, 1 a minor.
+func newerTag(cur string, tags []string) (string, int, bool) {
+	curNums, shape, ok := tagParts(cur)
+	if !ok {
+		return "", 0, false
+	}
+	best, bestNums := "", curNums
+	for _, t := range tags {
+		nums, sh, ok := tagParts(t)
+		if !ok || sh != shape || !lessInts(bestNums, nums) {
+			continue
+		}
+		best, bestNums = t, nums
+	}
+	if best == "" {
+		return "", 0, false
+	}
+	for i := range curNums {
+		if curNums[i] != bestNums[i] {
+			return best, i, true
+		}
+	}
+	return best, len(curNums), true
+}
+
+func lessInts(a, b []int) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
 }
 
 type chartOutdated struct{}
